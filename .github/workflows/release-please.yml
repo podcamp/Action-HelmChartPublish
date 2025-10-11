@@ -3,7 +3,13 @@ name: Release Please
 on:
   push:
     branches: [ master ]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      skip-tests:
+        description: 'Skip tests and linting (not recommended)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -11,22 +17,76 @@ permissions:
   pull-requests: write
 
 jobs:
+  lint-and-test:
+    # Run only for manual dispatch on master
+    if: github.ref == 'refs/heads/master'
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        if: ${{ github.event.inputs.skip-tests == 'false' && github.event_name == 'workflow_dispatch' }}
+        uses: actions/checkout@v5
+
+      - name: Setup Helm
+        if: ${{ github.event.inputs.skip-tests == 'false' && github.event_name == 'workflow_dispatch' }}
+        uses: azure/setup-helm@v4
+
+      - name: Lint (PSScriptAnalyzer)
+        if: ${{ github.event.inputs.skip-tests == 'false' && github.event_name == 'workflow_dispatch' }}
+        uses: nicola-preden/Action-PSScriptAnalyzer@v0.3.1
+        with:
+          module-path: ./src
+          upload-artifact: 'false'
+          throw-on-warnings: 'false'
+          throw-on-errors: 'true'
+
+      - name: Trust PSGallery
+        if: ${{ github.event.inputs.skip-tests == 'false' && github.event_name == 'workflow_dispatch' }}
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
+
+      - name: Install Pester
+        if: ${{ github.event.inputs.skip-tests == 'false' && github.event_name == 'workflow_dispatch' }}
+        shell: pwsh
+        run: |
+          Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck -AllowClobber
+
+      - name: Run Pester tests
+        if: ${{ github.event.inputs.skip-tests == 'false' && github.event_name == 'workflow_dispatch' }}
+        id: pester
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $resultPath = Join-Path $PWD 'testResults.xml'
+          Invoke-Pester -CI -Path tests -Output Detailed
+
+      - name: Upload Pester results artifact
+        if: ${{ github.event.inputs.skip-tests == 'false' && github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pester-results
+          path: testResults.xml
+          if-no-files-found: warn
+  
   release-please:
     # Run only on manual dispatch or on push with a release-please bump commit message
     if: |
       github.ref == 'refs/heads/master' && 
       (
-        github.event_name == 'workflow_dispatch' ||
-        (
-            github.event_name == 'push' && 
-            (
-              contains(github.event.head_commit.message, 'chore(master): release') ||
-              contains(github.event.head_commit.message, 'chore: release') ||
-              contains(toJSON(github.event.commits), 'chore(master): release') ||
-              contains(toJSON(github.event.commits), 'chore: release')
-            )
-        )
+        (github.event_name == 'workflow_dispatch' && needs.lint-and-test.result == 'success')
+        ||
+          (
+              github.event_name == 'push' && 
+              (
+                contains(github.event.head_commit.message, 'chore(master): release') ||
+                contains(github.event.head_commit.message, 'chore: release') ||
+                contains(toJSON(github.event.commits), 'chore(master): release') ||
+                contains(toJSON(github.event.commits), 'chore: release')
+              )
+          )
       )
+    needs: lint-and-test
     name: Create or update release PR
     runs-on: ubuntu-latest
     concurrency:

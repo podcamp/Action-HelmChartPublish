@@ -1,0 +1,231 @@
+# SPDX-License-Identifier: GPL-3.0
+# Copyright (C) 2025 Nicola Preden
+
+name: HelmChartPublish
+description: Package and publish a Helm Chart to the GitHub Registry and/or GitHub Releases.
+author: nicola-preden
+
+inputs:
+  token:
+    description: 'GitHub token used for API calls and GHCR auth. If not provided, the runner-provided GITHUB_TOKEN will be used.'
+    required: false
+    default: ''
+  tag-name:
+    description: 'Tag name to package (e.g., v0.1.2 or 0.1.2). If not provided, the action will fail.'
+    required: true
+  chart-path:
+    description: 'Path to the Helm Chart to package (relative to the workspace root).'
+    required: false
+    default: './src'
+  github-registry-path:
+    description: 'Path segment under ghcr.io/<owner>/ where charts are pushed (e.g., charts or helm).'
+    required: false
+    default: 'charts'
+  enable-cosign:
+    description: 'If true, cosign will sign the pushed OCI chart references (global default, can be overridden per-target).'
+    required: false
+    default: 'false'
+  enable-cosign-ghcr:
+    description: 'If set, overrides enable-cosign for GHCR only (true/false). Empty string means inherit global.'
+    required: false
+    default: ''
+  enable-cosign-private:
+    description: 'If set, overrides enable-cosign for Private registry only (true/false). Empty string means inherit global.'
+    required: false
+    default: ''
+  cosign-key:
+    description: 'Optional PEM private key for cosign (if omitted, keyless OIDC is used).'
+    required: false
+    default: ''
+  cosign-key-password:
+    description: 'Optional password for the cosign private key.'
+    required: false
+    default: ''
+  cosign-annotations:
+    description: 'Optional comma-separated annotations for cosign (key=value,key2=value2).'
+    required: false
+    default: ''
+  cosign-args:
+    description: 'Optional extra arguments to pass to cosign sign.'
+    required: false
+    default: ''
+  enable-cosign-attest:
+    description: 'If true, cosign will create an attestation for the pushed OCI references (global default, can be overridden per-target).'
+    required: false
+    default: 'false'
+  enable-cosign-attest-ghcr:
+    description: 'If set, overrides enable-cosign-attest for GHCR only (true/false). Empty string means inherit global.'
+    required: false
+    default: ''
+  enable-cosign-attest-private:
+    description: 'If set, overrides enable-cosign-attest for Private registry only (true/false). Empty string means inherit global.'
+    required: false
+    default: ''
+  cosign-attest-type:
+    description: 'Predicate type for cosign attest (e.g., application/vnd.in-toto+json).'
+    required: false
+    default: 'application/vnd.in-toto+json'
+  cosign-attest-predicate:
+    description: 'Inline JSON/YAML predicate content for cosign attest.'
+    required: false
+    default: ''
+  cosign-attest-predicate-path:
+    description: 'Path to predicate file to use with cosign attest (overrides inline predicate if provided).'
+    required: false
+    default: ''
+  push-to-github-release:
+    description: 'Whether to attach the packaged chart to GitHub Releases.'
+    required: false
+    default: 'true'
+  push-to-github-registry:
+    description: 'Whether to publish the Helm Chart to the GitHub Container Registry (OCI).'
+    required: false
+    default: 'true'
+  push-to-private-registry:
+    description: 'Whether to publish the Helm Chart to a private OCI registry.'
+    required: false
+    default: 'false'
+  private-registry-url:
+    description: 'Target private registry OCI URL (e.g., oci://registry.example.com/org/charts). Required if push-to-private-registry is true.'
+    required: false
+    default: ''
+  private-registry-username:
+    description: 'Username for private registry (optional if token is sufficient).'
+    required: false
+    default: ''
+  private-registry-password:
+    description: 'Password for private registry (or token). If omitted, token input will be used if available.'
+    required: false
+    default: ''
+  repo-url:
+    description: 'GitHub repository in owner/repo form. Default github.repository.'
+    required: false
+    default: ${{ github.repository }}
+  github-api-url:
+    description: 'GitHub API URL. Default github.api_url.'
+    required: false
+    default: ${{ github.api_url }}
+
+outputs:
+  version:
+    description: 'Helm Chart version parsed from Chart.yaml.'
+    value: ${{ steps.prep.outputs.version }}
+  chart-name:
+    description: 'Helm Chart name parsed from Chart.yaml.'
+    value: ${{ steps.prep.outputs.chart-name }}
+  tgz:
+    description: 'Path to the generated tgz archive.'
+    value: ${{ steps.prep.outputs.tgz }}
+  release-exists:
+    description: 'Whether a release exists for the provided tag.'
+    value: ${{ steps.check_release.outputs.release-exists }}
+
+runs:
+  using: composite
+  steps:
+
+    - name: Check if release exists for tag (non-release events)
+      id: check_release
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task CheckRelease -Token '${{ inputs.token }}' -GitHubApiUrl '${{ inputs.github-api-url }}' -TagName '${{ inputs.tag-name }}' -RepositoryUrl '${{ inputs.repo-url }}'
+
+    - name: Release missing — skipping packaging
+      if: ${{ steps.check_release.outputs.release-exists == 'false' }}
+      shell: pwsh
+      run: |
+        echo "Release for tag ${{ inputs.tag-name }} does not exist. Skipping Helm chart packaging and publishing."
+
+    - name: Checkout repository at tag
+      if: ${{ steps.check_release.outputs.release-exists == 'true' }}
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.tag-name }}
+
+    - name: Setup Helm
+      if: ${{ steps.check_release.outputs.release-exists == 'true' }}
+      uses: azure/setup-helm@v4
+
+    - name: Setup Cosign
+      if: ${{ (inputs.enable-cosign == 'true' || inputs.enable-cosign-attest == 'true' || inputs.enable-cosign-ghcr == 'true' || inputs.enable-cosign-attest-ghcr == 'true' || inputs.enable-cosign-private == 'true' || inputs.enable-cosign-attest-private == 'true') && steps.check_release.outputs.release-exists == 'true' }}
+      uses: sigstore/cosign-installer@v3
+
+    - name: Package Helm chart
+      if: ${{ steps.check_release.outputs.release-exists == 'true' }}
+      id: prep
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task Prepare -ChartPath '${{ inputs.chart-path }}'
+
+    - name: Upload chart artifact
+      if: ${{ steps.check_release.outputs.release-exists == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.prep.outputs.chart-name }}-${{ steps.prep.outputs.version }}
+        path: ${{ steps.prep.outputs.tgz }}
+        compression-level: 0
+
+    - name: Attach tgz to existing GitHub Release (backfill)
+      if: ${{ inputs.push-to-github-release == 'true' && steps.check_release.outputs.release-exists == 'true' }}
+      uses: softprops/action-gh-release@v2
+      with:
+        files: ${{ steps.prep.outputs.tgz }}
+        tag_name: ${{ inputs.tag-name }}
+
+    - name: Publish chart to GitHub Container Registry
+      if: ${{ inputs.push-to-github-registry == 'true' && steps.check_release.outputs.release-exists == 'true' }}
+      shell: pwsh
+      env:
+        POWERSHELLUPDATECHECK: 'Off'
+      run: |
+        & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task PublishToGitHubRegistry -Token '${{ inputs.token }}' -RepositoryUrl '${{ inputs.repo-url }}' -GitHubRegistryPath '${{ inputs.github-registry-path }}'
+
+    - name: Cosign sign (GHCR)
+      if: ${{ (inputs.enable-cosign-ghcr == 'true' || (inputs.enable-cosign-ghcr == '' && inputs.enable-cosign == 'true')) && inputs.push-to-github-registry == 'true' && steps.check_release.outputs.release-exists == 'true' }}
+      shell: pwsh
+      env:
+        POWERSHELLUPDATECHECK: 'Off'
+      run: |
+        & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task CosignSign -CosignTarget 'GitHub' -RepositoryUrl '${{ inputs.repo-url }}' -GitHubRegistryPath '${{ inputs.github-registry-path }}' -ChartName '${{ steps.prep.outputs.chart-name }}' -ChartVersion '${{ steps.prep.outputs.version }}' -CosignKey '${{ inputs.cosign-key }}' -CosignKeyPassword '${{ inputs.cosign-key-password }}' -CosignAnnotations '${{ inputs.cosign-annotations }}' -CosignArgs '${{ inputs.cosign-args }}'
+
+    - name: Cosign attest (GHCR)
+      if: ${{ (inputs.enable-cosign-attest-ghcr == 'true' || (inputs.enable-cosign-attest-ghcr == '' && inputs.enable-cosign-attest == 'true')) && inputs.push-to-github-registry == 'true' && steps.check_release.outputs.release-exists == 'true' }}
+      shell: pwsh
+      env:
+        POWERSHELLUPDATECHECK: 'Off'
+      run: |
+        & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task CosignAttest -CosignTarget 'GitHub' -RepositoryUrl '${{ inputs.repo-url }}' -GitHubRegistryPath '${{ inputs.github-registry-path }}' -ChartName '${{ steps.prep.outputs.chart-name }}' -ChartVersion '${{ steps.prep.outputs.version }}' -CosignKey '${{ inputs.cosign-key }}' -CosignKeyPassword '${{ inputs.cosign-key-password }}' -CosignAnnotations '${{ inputs.cosign-annotations }}' -CosignArgs '${{ inputs.cosign-args }}' -CosignAttestType '${{ inputs.cosign-attest-type }}' -CosignAttestPredicate '${{ inputs.cosign-attest-predicate }}' -CosignAttestPredicatePath '${{ inputs.cosign-attest-predicate-path }}'
+
+    - name: Docker login (private registry)
+      if: ${{ inputs.private-registry-username != '' && inputs.private-registry-password != '' && steps.check_release.outputs.release-exists == 'true' && (inputs.push-to-private-registry == 'true' || inputs.enable-cosign-private == 'true' || (inputs.enable-cosign-private == '' && inputs.enable-cosign == 'true') || inputs.enable-cosign-attest-private == 'true' || (inputs.enable-cosign-attest-private == '' && inputs.enable-cosign-attest == 'true')) }}
+      shell: pwsh
+      run: |
+        $reg = '${{ inputs.private-registry-url }}'
+        $reg = $reg -replace '^oci://',''
+        $host = $reg.Split('/')[0]
+        docker login $host -u '${{ inputs.private-registry-username }}' -p '${{ inputs.private-registry-password }}'
+
+    - name: Publish chart to private registry
+      if: ${{ inputs.push-to-private-registry == 'true' && steps.check_release.outputs.release-exists == 'true' }}
+      shell: pwsh
+      env:
+        POWERSHELLUPDATECHECK: 'Off'
+      run: |
+        & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task PublishToPrivateRegistry -Token '${{ inputs.token }}' -PrivateRegistryUrl '${{ inputs.private-registry-url }}' -PrivateRegistryUsername '${{ inputs.private-registry-username }}' -PrivateRegistryPassword '${{ inputs.private-registry-password }}'
+
+    - name: Cosign sign (Private)
+      if: ${{ (inputs.enable-cosign-private == 'true' || (inputs.enable-cosign-private == '' && inputs.enable-cosign == 'true')) && inputs.push-to-private-registry == 'true' && steps.check_release.outputs.release-exists == 'true' }}
+      shell: pwsh
+      env:
+        POWERSHELLUPDATECHECK: 'Off'
+      run: |
+        & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task CosignSign -CosignTarget 'Private' -PrivateRegistryUrl '${{ inputs.private-registry-url }}' -ChartName '${{ steps.prep.outputs.chart-name }}' -ChartVersion '${{ steps.prep.outputs.version }}' -CosignKey '${{ inputs.cosign-key }}' -CosignKeyPassword '${{ inputs.cosign-key-password }}' -CosignAnnotations '${{ inputs.cosign-annotations }}' -CosignArgs '${{ inputs.cosign-args }}'
+
+    - name: Cosign attest (Private)
+      if: ${{ (inputs.enable-cosign-attest-private == 'true' || (inputs.enable-cosign-attest-private == '' && inputs.enable-cosign-attest == 'true')) && inputs.push-to-private-registry == 'true' && steps.check_release.outputs.release-exists == 'true' }}
+      shell: pwsh
+      env:
+        POWERSHELLUPDATECHECK: 'Off'
+      run: |
+        & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task CosignAttest -CosignTarget 'Private' -PrivateRegistryUrl '${{ inputs.private-registry-url }}' -ChartName '${{ steps.prep.outputs.chart-name }}' -ChartVersion '${{ steps.prep.outputs.version }}' -CosignKey '${{ inputs.cosign-key }}' -CosignKeyPassword '${{ inputs.cosign-key-password }}' -CosignAnnotations '${{ inputs.cosign-annotations }}' -CosignArgs '${{ inputs.cosign-args }}' -CosignAttestType '${{ inputs.cosign-attest-type }}' -CosignAttestPredicate '${{ inputs.cosign-attest-predicate }}' -CosignAttestPredicatePath '${{ inputs.cosign-attest-predicate-path }}'

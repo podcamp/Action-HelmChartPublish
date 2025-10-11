@@ -41,52 +41,55 @@ $ErrorActionPreference = 'Stop'
 
 function Write-GitHubOutput {
     param(
-        [Parameter(Mandatory)] [string] $Name,
-        [Parameter(Mandatory)] [string] $Value
+        [Parameter(Mandatory=$true)] [string] $Name,
+        [Parameter(Mandatory=$true)] [string] $Value
     )
     if (-not $env:GITHUB_OUTPUT) { return }
     Add-Content -Path $env:GITHUB_OUTPUT -Value ("{0}={1}" -f $Name, $Value)
 }
 
-function Get-GitHubServerUrl {
-    param([Parameter(Mandatory)][string]$ApiUrl)
-    if ($ApiUrl -match '^https://api\.github\.com/?$') {
-        return 'https://github.com'
+function Test-HelmCliAvailable {
+    try {
+        $null = helm version --short 2>$null
     }
-    return ($ApiUrl -replace '/api/v3/?$', '')
+    catch {
+        throw 'Helm CLI is not available in PATH. Install Helm v3 before running this task.'
+    }
 }
 
-function Ensure-HelmAvailable {
-    try { $null = helm version --short 2>$null } catch { throw 'Helm CLI is not available in PATH. Install Helm v3 before running this task.' }
-}
-
-function Ensure-CosignAvailable {
-    try { $null = cosign version 2>$null } catch { throw 'cosign CLI is not available in PATH. Install cosign before running this task.' }
+function Test-CosignCliAvailable {
+    try {
+        $null = cosign version 2>$null
+    }
+    catch {
+        throw 'cosign CLI is not available in PATH. Install cosign before running this task.'
+    }
 }
 
 function Read-ChartInfo {
-    param([Parameter(Mandatory)][string]$Path)
+    param([Parameter(Mandatory=$true)][string]$Path)
     $chartFile = Join-Path -Path $Path -ChildPath 'Chart.yaml'
     if (-not (Test-Path $chartFile)) { throw "Chart.yaml not found under '$Path'" }
 
-    $name = $null; $version = $null
+    $chartName = $null; $chartVersion = $null
     if (Get-Command ConvertFrom-Yaml -ErrorAction SilentlyContinue) {
         $yaml = Get-Content -Raw -Path $chartFile | ConvertFrom-Yaml
-        $name = $yaml.name
-        $version = $yaml.version
+        $chartName = $yaml.name
+        $chartVersion = $yaml.version
     } else {
         $content = Get-Content -Raw -Path $chartFile
-        if ($content -match '(?im)^name:\s*(.+)$') { $name = $Matches[1].Trim() }
-        if ($content -match '(?im)^version:\s*([^\s#]+)') { $version = $Matches[1].Trim() }
+        if ($content -match '(?im)^name:\s*(.+)$') { $chartName = $Matches[1].Trim() }
+        if ($content -match '(?im)^version:\s*([^\s#]+)') { $chartVersion = $Matches[1].Trim() }
     }
-    if (-not $name) { throw 'Chart name not found in Chart.yaml' }
-    if (-not $version) { throw 'Chart version not found in Chart.yaml' }
-    [pscustomobject]@{ Name = $name; Version = $version; ChartFile = $chartFile }
+    if (-not $chartName) { throw 'Chart name not found in Chart.yaml' }
+    if (-not $chartVersion) { throw 'Chart version not found in Chart.yaml' }
+    [pscustomobject]@{ Name = $chartName; Version = $chartVersion; ChartFile = $chartFile }
 }
 
 # Fallback token from environment if not provided
 if (-not $Token) { $Token = $env:GITHUB_TOKEN }
 
+# Dispatch by task using switch for clarity
 switch ($Task) {
     'CheckRelease' {
         if (-not $GitHubApiUrl) { $GitHubApiUrl = $env:GITHUB_API_URL }
@@ -106,89 +109,90 @@ switch ($Task) {
         } catch {
             Write-GitHubOutput -Name 'release-exists' -Value 'false'
         }
+        break
     }
-
     'Prepare' {
         if (-not $ChartPath) { $ChartPath = './src' }
-        Ensure-HelmAvailable
+        Test-HelmCliAvailable
 
         $info = Read-ChartInfo -Path $ChartPath
 
         # Create output folder and package
-        $outDir = Join-Path $PWD 'out'
-        if (Test-Path $outDir) {
-            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $outDir
-        }
-        New-Item -ItemType Directory -Path $outDir | Out-Null
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue out
+        New-Item -ItemType Directory -Path out | Out-Null
 
-        $args = @('-d', $outDir)
-        $packageOutput = helm package "$ChartPath" @args 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            throw "helm package failed: $packageOutput"
-        }
+        $packageOutput = helm package "$ChartPath" -d out 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "helm package failed: $packageOutput" }
 
         # Find produced tgz
-        $tgz = Get-ChildItem -Path $outDir -Filter "$($info.Name)-$($info.Version).tgz" | Select-Object -First 1
+        $tgz = Get-ChildItem -Path out -Filter "$($info.Name)-$($info.Version).tgz" | Select-Object -First 1
         if (-not $tgz) {
-            # Fallback: pick any tgz in out
-            $tgz = Get-ChildItem -Path $outDir -Filter '*.tgz' | Select-Object -First 1
+            $tgz = Get-ChildItem -Path out -Filter '*.tgz' | Select-Object -First 1
         }
-        if (-not $tgz) { throw "Packaged chart (.tgz) not found in $outDir" }
+        if (-not $tgz) { throw 'Packaged chart (.tgz) not found in ./out' }
 
-        Write-Host "Packaged chart: $($tgz.FullName)"
+        Write-Verbose "Packaged chart: $($tgz.FullName)"
         Write-GitHubOutput -Name 'version' -Value $info.Version
         Write-GitHubOutput -Name 'tgz' -Value $tgz.FullName
         Write-GitHubOutput -Name 'chart-name' -Value $info.Name
+        break
     }
-
     'PublishToGitHubRegistry' {
-        Ensure-HelmAvailable
+        Test-HelmCliAvailable
         if (-not $RepositoryUrl) { $RepositoryUrl = $env:GITHUB_REPOSITORY }
-        if (-not ($RepositoryUrl -and $RepositoryUrl.Contains('/'))) {
-            throw "Invalid RepositoryUrl '$RepositoryUrl' (expected 'owner/repo')"
-        }
+        if (-not ($RepositoryUrl -and $RepositoryUrl.Contains('/'))) { throw "Invalid RepositoryUrl '$RepositoryUrl' (expected 'owner/repo')" }
         if (-not $Token) { throw 'Token is required to authenticate to ghcr.io' }
         if (-not $GitHubRegistryPath) { $GitHubRegistryPath = 'charts' }
 
         $owner = $RepositoryUrl.Split('/')[0]
-        $registry = 'ghcr.io'
-        $repo = "oci://$registry/$owner/$GitHubRegistryPath"
+        $ociHost = 'ghcr.io'
+        $repo = "oci://$ociHost/$owner/$GitHubRegistryPath"
 
-        $loginOut = helm registry login $registry --username $owner --password $Token 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "Helm registry login to $registry failed: $loginOut" }
+        $loginOut = helm registry login $ociHost --username $owner --password $Token 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "Helm registry login to $ociHost failed: $loginOut" }
 
         $tgz = Get-ChildItem -Path out -Filter '*.tgz' | Select-Object -First 1
         if (-not $tgz) { throw 'No packaged chart found under ./out. Run -Task Prepare first.' }
 
-        $provFlag = @()
-        if (Test-Path ("{0}.prov" -f $tgz.FullName)) { $provFlag = @('--prov') }
+        $helmPushProvArgs = @()
+        if (Test-Path ("{0}.prov" -f $tgz.FullName)) { $helmPushProvArgs = @('--prov') }
 
-        $pushOut = helm push "$($tgz.FullName)" "$repo" @provFlag 2>&1
+        $pushOut = helm push "$($tgz.FullName)" "$repo" @helmPushProvArgs 2>&1
         if ($LASTEXITCODE -ne 0) { throw "Helm push to $repo failed: $pushOut" }
-        Write-Host "Pushed chart to $repo"
+        Write-Verbose "Pushed chart to $repo"
+        break
     }
-
     'PublishToPrivateRegistry' {
-        Ensure-HelmAvailable
+        Test-HelmCliAvailable
         if (-not $PrivateRegistryUrl) { throw 'PrivateRegistryUrl is required (e.g., registry.example.com/org/charts or registry.example.com)' }
 
         $tgz = Get-ChildItem -Path out -Filter '*.tgz' | Select-Object -First 1
         if (-not $tgz) { throw 'No packaged chart found under ./out. Run -Task Prepare first.' }
 
-        $provFlag = @()
-        if (Test-Path ("{0}.prov" -f $tgz.FullName)) { $provFlag = @('--prov') }
+        $helmPushProvArgs = @()
+        if (Test-Path ("{0}.prov" -f $tgz.FullName)) { $helmPushProvArgs = @('--prov') }
+
+        # Login for Helm registry if credentials are provided or token exists
+        $ociHostPrivate = ($PrivateRegistryUrl -replace '^oci://','').Split('/')[0]
+        if ($PrivateRegistryUsername -and $PrivateRegistryPassword) {
+            $loginOut = helm registry login $ociHostPrivate --username $PrivateRegistryUsername --password $PrivateRegistryPassword 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Helm registry login to $ociHostPrivate failed: $loginOut" }
+            Write-Verbose "Helm registry login succeeded for $ociHostPrivate using username/password"
+        } elseif ($Token) {
+            $loginOut = helm registry login $ociHostPrivate --username token --password $Token 2>&1
+            if ($LASTEXITCODE -ne 0) { Write-Verbose "Helm registry login to $ociHostPrivate with token failed (continuing if registry allows anonymous)" }
+        }
 
         $target = if ($PrivateRegistryUrl.StartsWith('oci://')) { $PrivateRegistryUrl } else { "oci://$PrivateRegistryUrl" }
-        $pushOut = helm push "$($tgz.FullName)" "$target" @provFlag 2>&1
+        $pushOut = helm push "$($tgz.FullName)" "$target" @helmPushProvArgs 2>&1
         if ($LASTEXITCODE -ne 0) { throw "Helm push to $target failed: $pushOut" }
-        Write-Host "Pushed chart to $target"
+        Write-Verbose "Pushed chart to $target"
+        break
     }
-
     'CosignSign' {
-        Ensure-CosignAvailable
+        Test-CosignCliAvailable
 
         if (-not $ChartName -or -not $ChartVersion) {
-            # Try to derive from ChartPath if available
             if ($ChartPath) {
                 $info = Read-ChartInfo -Path $ChartPath
                 if (-not $ChartName) { $ChartName = $info.Name }
@@ -208,15 +212,11 @@ switch ($Task) {
         elseif ($CosignTarget -eq 'Private') {
             if (-not $PrivateRegistryUrl) { throw 'PrivateRegistryUrl is required for CosignSign when CosignTarget=Private' }
             $url = $PrivateRegistryUrl -replace '^oci://',''
-            # If user passed only host, append chart path later
             $url = $url.TrimEnd('/')
             $ref = "$url/$($ChartName):$($ChartVersion)"
         }
-        else {
-            throw "Unsupported CosignTarget '$CosignTarget' (use 'GitHub' or 'Private')"
-        }
+        else { throw "Unsupported CosignTarget '$CosignTarget' (use 'GitHub' or 'Private')" }
 
-        # Build annotation flags
         $annoFlags = @()
         if ($CosignAnnotations) {
             foreach ($pair in $CosignAnnotations.Split(',')) {
@@ -225,7 +225,6 @@ switch ($Task) {
             }
         }
 
-        # Write key to a temp file if provided
         $keyFile = $null
         if ($CosignKey) {
             $keyFile = Join-Path ([IO.Path]::GetTempPath()) ('cosign-key-' + [guid]::NewGuid().ToString('N') + '.pem')
@@ -234,10 +233,7 @@ switch ($Task) {
         }
 
         $extraArgs = @()
-        if ($CosignArgs) {
-            # naive split on spaces; for complex quoting, prefer passing via CosignArgs already tokenized
-            $extraArgs = $CosignArgs -split '\s+'
-        }
+        if ($CosignArgs) { $extraArgs = $CosignArgs -split '\s+' }
 
         $cmd = @('sign','--yes')
         if ($keyFile) { $cmd += @('--key', $keyFile) }
@@ -245,14 +241,14 @@ switch ($Task) {
         $cmd += $extraArgs
         $cmd += @($ref)
 
-        Write-Host "Running: cosign $($cmd -join ' ')"
+        Write-Verbose "Running: cosign $($cmd -join ' ')"
         $out = cosign @cmd 2>&1
         if ($LASTEXITCODE -ne 0) { throw "cosign sign failed: $out" }
-        Write-Host "cosign sign succeeded for $ref"
+        Write-Verbose "cosign sign succeeded for $ref"
+        break
     }
-
     'CosignAttest' {
-        Ensure-CosignAvailable
+        Test-CosignCliAvailable
 
         if (-not $ChartName -or -not $ChartVersion) {
             if ($ChartPath) {
@@ -277,9 +273,7 @@ switch ($Task) {
             $url = $url.TrimEnd('/')
             $ref = "$($url)/$($ChartName):$($ChartVersion)"
         }
-        else {
-            throw "Unsupported CosignTarget '$CosignTarget' (use 'GitHub' or 'Private')"
-        }
+        else { throw "Unsupported CosignTarget '$CosignTarget' (use 'GitHub' or 'Private')" }
 
         $annoFlags = @()
         if ($CosignAnnotations) {
@@ -309,7 +303,6 @@ switch ($Task) {
                 Set-Content -Path $predicateFile -Value $CosignAttestPredicate -Encoding UTF8
                 $tempPredicate = $true
             } else {
-                # Create a minimal predicate if none provided
                 $predicateFile = Join-Path ([IO.Path]::GetTempPath()) ('predicate-' + [guid]::NewGuid().ToString('N') + '.json')
                 $now = [DateTime]::UtcNow.ToString('o')
                 $payload = @{ chart = $ChartName; version = $ChartVersion; buildTime = $now } | ConvertTo-Json -Depth 5
@@ -324,18 +317,16 @@ switch ($Task) {
         $cmd += $extraArgs
         $cmd += @($ref)
 
-        Write-Host "Running: cosign $($cmd -join ' ')"
+        Write-Verbose "Running: cosign $($cmd -join ' ')"
         $out = cosign @cmd 2>&1
         if ($LASTEXITCODE -ne 0) { throw "cosign attest failed: $out" }
-        Write-Host "cosign attest succeeded for $ref"
+        Write-Verbose "cosign attest succeeded for $ref"
 
-        if ($tempPredicate -and (Test-Path $predicateFile)) {
-            Remove-Item -Force $predicateFile -ErrorAction SilentlyContinue
-        }
-        if ($keyFile -and (Test-Path $keyFile)) {
-            Remove-Item -Force $keyFile -ErrorAction SilentlyContinue
-        }
+        if ($tempPredicate -and (Test-Path $predicateFile)) { Remove-Item -Force $predicateFile -ErrorAction SilentlyContinue }
+        if ($keyFile -and (Test-Path $keyFile)) { Remove-Item -Force $keyFile -ErrorAction SilentlyContinue }
+        break
     }
-
-    default { throw "Unknown -Task '$Task'." }
+    Default {
+        throw "Unknown -Task '$Task'."
+    }
 }

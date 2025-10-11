@@ -1,0 +1,15 @@
+{
+  "name": "template-base",
+  "version": "2.2.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare": "husky",
+    "lint:commit": "commitlint --from=HEAD~1"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.4.0",
+    "@commitlint/config-conventional": "^19.4.0",
+    "husky": "^9.1.5"
+  }
+}

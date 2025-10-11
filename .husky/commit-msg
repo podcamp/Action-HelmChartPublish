@@ -1,0 +1,11 @@
+# Abort on any error
+set -e
+
+BIN="./node_modules/.bin/commitlint"
+if [ ! -x "$BIN" ]; then
+  echo "commitlint not found. Run: npm install" >&2
+  exit 1
+fi
+
+"$BIN" --edit "$1"
+

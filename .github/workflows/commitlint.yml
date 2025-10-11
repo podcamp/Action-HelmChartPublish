@@ -1,0 +1,28 @@
+name: Commitlint
+
+on:
+  pull_request:
+    branches:
+      - master
+    types: [ opened, synchronize, edited, reopened, ready_for_review ]
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  commitlint:
+    name: Lint commits
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate commit messages
+        uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: commitlint.config.mjs

@@ -1,0 +1,41 @@
+name: Release Please
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    # Run only on manual dispatch or on push with a release-please bump commit message
+    if: |
+      github.ref == 'refs/heads/master' && 
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+            github.event_name == 'push' && 
+            (
+              contains(github.event.head_commit.message, 'chore(master): release') ||
+              contains(github.event.head_commit.message, 'chore: release') ||
+              contains(toJSON(github.event.commits), 'chore(master): release') ||
+              contains(toJSON(github.event.commits), 'chore: release')
+            )
+        )
+      )
+    name: Create or update release PR
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-please-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Release Please
+        uses: nicola-preden/Action-ReleasePlease@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json

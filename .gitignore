@@ -1,0 +1,159 @@
+# -------------------------
+# OS and editor files
+# -------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# IDEs/Editors
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# -------------------------
+# JavaScript / Node
+# -------------------------
+node_modules/
+jspm_packages/
+
+# Build outputs
+build/
+dist/
+out/
+lib/
+.terraform/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Caches and temp
+.eslintcache
+.stylelintcache
+.tsbuildinfo
+.cache/
+.tmp/
+.temp/
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# TypeScript
+*.tsbuildinfo
+
+# Package managers
+.pnpm-store/
+.pnp.cjs
+.pnp.loader.mjs
+.pnp.data.json
+
+# -------------------------
+# .NET / Visual Studio
+# -------------------------
+# Build results
+[Bb]in/
+[Oo]bj/
+[Bb]uild/
+[Bb]ld/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio working folder
+.vs/
+
+# Debug/Release configuration folders
+[Dd]ebug/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+
+# Rider/Resharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# MSBuild binary log
+*.binlog
+
+# Test results
+TestResult*/
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# NuGet
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+!**/packages/repositories.config
+.nuget/packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Publish profiles and artifacts
+**/*.Publish.xml
+**/*.pubxml
+**/*.pubxml.user
+AppPackages/
+BundleArtifacts/
+PublishProfiles/
+
+# IIS Express
+_IISExpress/
+
+# Entity Framework
+migrations/**/sql/
+
+# Others
+*.svclog
+*.pidb
+*.opendb
+*.VC.db
+
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# Crash dumps
+*.dmp
+
+# -------------------------
+# Misc
+# -------------------------
+# Lockfiles (keep if you prefer reproducible installs)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Local tooling
+.local/
+
+# Temporary commit message files
+.commitmsg*

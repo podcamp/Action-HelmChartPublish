@@ -44,6 +44,7 @@ lib/
 # Test coverage
 coverage/
 .nyc_output/
+testResults.xml
 
 # Caches and temp
 .eslintcache

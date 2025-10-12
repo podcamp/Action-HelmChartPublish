@@ -4,7 +4,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('CheckRelease','Prepare','PublishToGitHubRegistry','PublishToPrivateRegistry','CosignSign','CosignAttest')]
+    [ValidateSet('CheckRelease','Prepare','PublishToGitHubRegistry','PublishToDockerHub','CosignSign','CosignAttest')]
     [string]$Task,
 
     [string]$Token,
@@ -14,20 +14,19 @@ param(
 
     [string]$ChartPath,
 
-    # For private registry task
-    [string]$PrivateRegistryUrl,
-    [string]$PrivateRegistryUsername,
-    [string]$PrivateRegistryPassword,
-
     # For GitHub registry customization
     [string]$GitHubRegistryPath,
 
+    # For DockerHub
+    [string]$DockerHubUsername,
+    [string]$DockerHubPassword,
+    [string]$DockerHubNamespace,
+    [string]$DockerHubPath,
+
     # Cosign parameters
-    [string]$CosignTarget,            # 'GitHub' or 'Private'
+    [string]$CosignTarget,            # 'GitHub' or 'DockerHub'
     [string]$ChartName,
     [string]$ChartVersion,
-    [string]$CosignKey,
-    [string]$CosignKeyPassword,
     [string]$CosignAnnotations,       # comma-separated: key=value,key2=value2
     [string]$CosignArgs,               # extra flags, raw string
 
@@ -125,7 +124,11 @@ switch ($Task) {
         if ($LASTEXITCODE -ne 0) { throw "helm package failed: $packageOutput" }
 
         # Find produced tgz
-        $tgz = Get-ChildItem -Path out -Filter "$($info.Name)-$($info.Version).tgz" | Select-Object -First 1
+        $tgz = Get-ChildItem -Path out -Filter "$(
+            $info.Name
+        )-$(
+            $info.Version
+        ).tgz" | Select-Object -First 1
         if (-not $tgz) {
             $tgz = Get-ChildItem -Path out -Filter '*.tgz' | Select-Object -First 1
         }
@@ -157,14 +160,18 @@ switch ($Task) {
         $helmPushProvArgs = @()
         if (Test-Path ("{0}.prov" -f $tgz.FullName)) { $helmPushProvArgs = @('--prov') }
 
-        $pushOut = helm push "$($tgz.FullName)" "$repo" @helmPushProvArgs 2>&1
+        $pushOut = helm push "$(
+            $tgz.FullName
+        )" "$repo" @helmPushProvArgs 2>&1
         if ($LASTEXITCODE -ne 0) { throw "Helm push to $repo failed: $pushOut" }
         Write-Verbose "Pushed chart to $repo"
         break
     }
-    'PublishToPrivateRegistry' {
+    'PublishToDockerHub' {
         Test-HelmCliAvailable
-        if (-not $PrivateRegistryUrl) { throw 'PrivateRegistryUrl is required (e.g., registry.example.com/org/charts or registry.example.com)' }
+        if (-not $DockerHubUsername -or -not $DockerHubPassword) { throw 'DockerHubUsername and DockerHubPassword are required for PublishToDockerHub' }
+        if (-not $DockerHubNamespace) { $DockerHubNamespace = $DockerHubUsername }
+        if (-not $DockerHubPath) { $DockerHubPath = 'charts' }
 
         $tgz = Get-ChildItem -Path out -Filter '*.tgz' | Select-Object -First 1
         if (-not $tgz) { throw 'No packaged chart found under ./out. Run -Task Prepare first.' }
@@ -172,21 +179,16 @@ switch ($Task) {
         $helmPushProvArgs = @()
         if (Test-Path ("{0}.prov" -f $tgz.FullName)) { $helmPushProvArgs = @('--prov') }
 
-        # Login for Helm registry if credentials are provided or token exists
-        $ociHostPrivate = ($PrivateRegistryUrl -replace '^oci://','').Split('/')[0]
-        if ($PrivateRegistryUsername -and $PrivateRegistryPassword) {
-            $loginOut = helm registry login $ociHostPrivate --username $PrivateRegistryUsername --password $PrivateRegistryPassword 2>&1
-            if ($LASTEXITCODE -ne 0) { throw "Helm registry login to $ociHostPrivate failed: $loginOut" }
-            Write-Verbose "Helm registry login succeeded for $ociHostPrivate using username/password"
-        } elseif ($Token) {
-            $loginOut = helm registry login $ociHostPrivate --username token --password $Token 2>&1
-            if ($LASTEXITCODE -ne 0) { Write-Verbose "Helm registry login to $ociHostPrivate with token failed (continuing if registry allows anonymous)" }
-        }
+        $ociHostDh = 'registry-1.docker.io'
+        $loginOut = helm registry login $ociHostDh --username $DockerHubUsername --password $DockerHubPassword 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "Helm registry login to $ociHostDh failed: $loginOut" }
 
-        $target = if ($PrivateRegistryUrl.StartsWith('oci://')) { $PrivateRegistryUrl } else { "oci://$PrivateRegistryUrl" }
-        $pushOut = helm push "$($tgz.FullName)" "$target" @helmPushProvArgs 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "Helm push to $target failed: $pushOut" }
-        Write-Verbose "Pushed chart to $target"
+        $repo = "oci://$ociHostDh/$DockerHubNamespace/$DockerHubPath"
+        $pushOut = helm push "$(
+            $tgz.FullName
+        )" "$repo" @helmPushProvArgs 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "Helm push to $repo failed: $pushOut" }
+        Write-Verbose "Pushed chart to $repo"
         break
     }
     'CosignSign' {
@@ -208,14 +210,28 @@ switch ($Task) {
             if (-not $GitHubRegistryPath) { $GitHubRegistryPath = 'charts' }
             $owner = $RepositoryUrl.Split('/')[0]
             $ref = "ghcr.io/$($owner)/$($GitHubRegistryPath)/$($ChartName):$($ChartVersion)"
+
+            # Ensure docker login for GHCR so cosign can push signatures
+            $tok = $Token
+            if (-not $tok) { $tok = $env:GITHUB_TOKEN }
+            if (-not $tok) { throw 'Token or GITHUB_TOKEN is required for ghcr.io docker login in keyless cosign.' }
+            $dl = docker login ghcr.io -u $owner -p $tok 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Docker login to ghcr.io failed: $dl" }
         }
-        elseif ($CosignTarget -eq 'Private') {
-            if (-not $PrivateRegistryUrl) { throw 'PrivateRegistryUrl is required for CosignSign when CosignTarget=Private' }
-            $url = $PrivateRegistryUrl -replace '^oci://',''
-            $url = $url.TrimEnd('/')
-            $ref = "$url/$($ChartName):$($ChartVersion)"
+        elseif ($CosignTarget -eq 'DockerHub') {
+            if (-not $DockerHubNamespace) { $DockerHubNamespace = $DockerHubUsername }
+            if (-not $DockerHubNamespace) { throw 'DockerHubNamespace or DockerHubUsername is required for CosignSign when CosignTarget=DockerHub' }
+            if (-not $DockerHubPath) { $DockerHubPath = 'charts' }
+            $ref = "registry-1.docker.io/$($DockerHubNamespace)/$($DockerHubPath)/$($ChartName):$($ChartVersion)"
+
+            # Ensure docker login for DockerHub so cosign can push signatures
+            if (-not $DockerHubUsername -or -not $DockerHubPassword) {
+                throw 'DockerHubUsername and DockerHubPassword are required for docker login in keyless cosign to DockerHub.'
+            }
+            $dl = docker login registry-1.docker.io -u $DockerHubUsername -p $DockerHubPassword 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Docker login to registry-1.docker.io failed: $dl" }
         }
-        else { throw "Unsupported CosignTarget '$CosignTarget' (use 'GitHub' or 'Private')" }
+        else { throw "Unsupported CosignTarget '$CosignTarget' (use 'GitHub' or 'DockerHub')" }
 
         $annoFlags = @()
         if ($CosignAnnotations) {
@@ -225,18 +241,10 @@ switch ($Task) {
             }
         }
 
-        $keyFile = $null
-        if ($CosignKey) {
-            $keyFile = Join-Path ([IO.Path]::GetTempPath()) ('cosign-key-' + [guid]::NewGuid().ToString('N') + '.pem')
-            Set-Content -Path $keyFile -Value $CosignKey -Encoding UTF8 -NoNewline
-            if ($CosignKeyPassword) { $env:COSIGN_PASSWORD = $CosignKeyPassword }
-        }
-
         $extraArgs = @()
         if ($CosignArgs) { $extraArgs = $CosignArgs -split '\s+' }
 
         $cmd = @('sign','--yes')
-        if ($keyFile) { $cmd += @('--key', $keyFile) }
         $cmd += $annoFlags
         $cmd += $extraArgs
         $cmd += @($ref)
@@ -266,14 +274,28 @@ switch ($Task) {
             if (-not $GitHubRegistryPath) { $GitHubRegistryPath = 'charts' }
             $owner = $RepositoryUrl.Split('/')[0]
             $ref = "ghcr.io/$($owner)/$($GitHubRegistryPath)/$($ChartName):$($ChartVersion)"
+
+            # Ensure docker login for GHCR so cosign can push attestations
+            $tok = $Token
+            if (-not $tok) { $tok = $env:GITHUB_TOKEN }
+            if (-not $tok) { throw 'Token or GITHUB_TOKEN is required for ghcr.io docker login in keyless cosign.' }
+            $dl = docker login ghcr.io -u $owner -p $tok 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Docker login to ghcr.io failed: $dl" }
         }
-        elseif ($CosignTarget -eq 'Private') {
-            if (-not $PrivateRegistryUrl) { throw 'PrivateRegistryUrl is required for CosignAttest when CosignTarget=Private' }
-            $url = $PrivateRegistryUrl -replace '^oci://',''
-            $url = $url.TrimEnd('/')
-            $ref = "$($url)/$($ChartName):$($ChartVersion)"
+        elseif ($CosignTarget -eq 'DockerHub') {
+            if (-not $DockerHubNamespace) { $DockerHubNamespace = $DockerHubUsername }
+            if (-not $DockerHubNamespace) { throw 'DockerHubNamespace or DockerHubUsername is required for CosignAttest when CosignTarget=DockerHub' }
+            if (-not $DockerHubPath) { $DockerHubPath = 'charts' }
+            $ref = "registry-1.docker.io/$($DockerHubNamespace)/$($DockerHubPath)/$($ChartName):$($ChartVersion)"
+
+            # Ensure docker login for DockerHub so cosign can push attestations
+            if (-not $DockerHubUsername -or -not $DockerHubPassword) {
+                throw 'DockerHubUsername and DockerHubPassword are required for docker login in keyless cosign to DockerHub.'
+            }
+            $dl = docker login registry-1.docker.io -u $DockerHubUsername -p $DockerHubPassword 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Docker login to registry-1.docker.io failed: $dl" }
         }
-        else { throw "Unsupported CosignTarget '$CosignTarget' (use 'GitHub' or 'Private')" }
+        else { throw "Unsupported CosignTarget '$CosignTarget' (use 'GitHub' or 'DockerHub')" }
 
         $annoFlags = @()
         if ($CosignAnnotations) {
@@ -281,13 +303,6 @@ switch ($Task) {
                 if ([string]::IsNullOrWhiteSpace($pair)) { continue }
                 $annoFlags += @('-a', $pair.Trim())
             }
-        }
-
-        $keyFile = $null
-        if ($CosignKey) {
-            $keyFile = Join-Path ([IO.Path]::GetTempPath()) ('cosign-key-' + [guid]::NewGuid().ToString('N') + '.pem')
-            Set-Content -Path $keyFile -Value $CosignKey -Encoding UTF8 -NoNewline
-            if ($CosignKeyPassword) { $env:COSIGN_PASSWORD = $CosignKeyPassword }
         }
 
         $extraArgs = @()
@@ -312,7 +327,6 @@ switch ($Task) {
         }
 
         $cmd = @('attest','--yes','--type', $CosignAttestType,'--predicate', $predicateFile)
-        if ($keyFile) { $cmd += @('--key', $keyFile) }
         $cmd += $annoFlags
         $cmd += $extraArgs
         $cmd += @($ref)
@@ -323,7 +337,6 @@ switch ($Task) {
         Write-Verbose "cosign attest succeeded for $ref"
 
         if ($tempPredicate -and (Test-Path $predicateFile)) { Remove-Item -Force $predicateFile -ErrorAction SilentlyContinue }
-        if ($keyFile -and (Test-Path $keyFile)) { Remove-Item -Force $keyFile -ErrorAction SilentlyContinue }
         break
     }
     Default {

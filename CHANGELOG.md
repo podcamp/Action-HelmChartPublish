@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.1](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.0...v0.2.1) (2025-10-12)
+
+
+### Features
+
+* add PowerShell tasks for PSGallery trust, module path detection, and ConvertFrom-Yaml installation ([b0696bb](https://github.com/nicola-preden/Action-HelmChartPublish/commit/b0696bba6f96dc7b73285ba29d171a17719ad3ed))
+
+
+### Bug Fixes
+
+* ensure ConvertFrom-Yaml is available by installing powershell-yaml module if missing ([a1f7407](https://github.com/nicola-preden/Action-HelmChartPublish/commit/a1f74077b92edc36f85de5160b8f1752313efbde))
+
 ## [0.2.0](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.1.1...v0.2.0) (2025-10-12)
 
 

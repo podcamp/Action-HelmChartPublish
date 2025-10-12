@@ -188,7 +188,7 @@ runs:
       env:
         POWERSHELLUPDATECHECK: 'Off'
       run: |
-        & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task CosignSign -CosignTarget 'GitHub' -RepositoryUrl '${{ inputs.repo-url }}' -GitHubRegistryPath '${{ inputs.github-registry-path }}' -ChartName '${{ steps.prep.outputs.chart-name }}' -ChartVersion '${{ steps.prep.outputs.version }}' -CosignAnnotations '${{ inputs.cosign-annotations }}' -CosignArgs '${{ inputs.cosign-args }}' -CosignAttestType '${{ inputs.cosign-attest-type }}' -CosignAttestPredicate '${{ inputs.cosign-attest-predicate }}' -CosignAttestPredicatePath '${{ inputs.cosign-attest-predicate-path }}'
+        & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task CosignSign -Token '${{ inputs.token }}' -CosignTarget 'GitHub' -RepositoryUrl '${{ inputs.repo-url }}' -GitHubRegistryPath '${{ inputs.github-registry-path }}' -ChartName '${{ steps.prep.outputs.chart-name }}' -ChartVersion '${{ steps.prep.outputs.version }}' -CosignAnnotations '${{ inputs.cosign-annotations }}' -CosignArgs '${{ inputs.cosign-args }}' -CosignAttestType '${{ inputs.cosign-attest-type }}' -CosignAttestPredicate '${{ inputs.cosign-attest-predicate }}' -CosignAttestPredicatePath '${{ inputs.cosign-attest-predicate-path }}'
 
     - name: Publish chart to DockerHub
       if: ${{ inputs.push-to-dockerhub == 'true' && steps.check_release.outputs.release-exists == 'true' }}

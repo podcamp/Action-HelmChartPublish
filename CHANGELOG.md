@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.0](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.1.1...v0.2.0) (2025-10-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* streamline cosign configuration in action.yml and remove attest functionality from Invoke-HelmChartPublishAction.ps1
+* simplify cosign configuration in action.yml and update README for clarity
+* enhance action.yml and Invoke-HelmChartPublishAction.ps1 for DockerHub support
+
+### Features
+
+* enhance action.yml and Invoke-HelmChartPublishAction.ps1 for DockerHub support ([9b4b4d3](https://github.com/nicola-preden/Action-HelmChartPublish/commit/9b4b4d3ef7063f168e653dbe515c9aa647731fca))
+* streamline cosign configuration in action.yml and remove attest functionality from Invoke-HelmChartPublishAction.ps1 ([8a8980e](https://github.com/nicola-preden/Action-HelmChartPublish/commit/8a8980ed42f1142a03612618e798dcd7d0e75a8b))
+
+
+### Bug Fixes
+
+* simplify cosign configuration in action.yml and update README for clarity ([19c6e7c](https://github.com/nicola-preden/Action-HelmChartPublish/commit/19c6e7c62ea49a12e5ba9f08bd6e346fc1007d97))
+* update DockerHub authentication from password to token in action.yml and Invoke-HelmChartPublishAction.ps1 ([5623da4](https://github.com/nicola-preden/Action-HelmChartPublish/commit/5623da406647f934090b3b3ea8678ee22ff42e31))
+* update README to reflect DockerHub token usage instead of password ([246bdb5](https://github.com/nicola-preden/Action-HelmChartPublish/commit/246bdb5d2d5193537481cc53d88fc5f18781c8b3))
+
 ## [0.1.1](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.1.0...v0.1.1) (2025-10-12)
 
 

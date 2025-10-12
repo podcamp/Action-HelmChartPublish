@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.1...v0.2.2) (2025-10-12)
+
+
+### Bug Fixes
+
+* correct ValidateSet options in Invoke-HelmChartPublishAction.ps1 ([c56a89e](https://github.com/nicola-preden/Action-HelmChartPublish/commit/c56a89ed51306f474f61ed885890a3061f7553d2))
+
 ## [0.2.1](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.0...v0.2.1) (2025-10-12)
 
 

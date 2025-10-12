@@ -112,7 +112,7 @@ switch ($Task) {
         break
     }
     'Prepare' {
-        if (-not $ChartPath) { $ChartPath = './src' }
+        if (-not $ChartPath) { throw '$ChartPath is not set.' }
         Test-HelmCliAvailable
 
         $info = Read-ChartInfo -Path $ChartPath

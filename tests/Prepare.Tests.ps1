@@ -6,24 +6,35 @@ BeforeAll {
 }
 
 Describe 'Invoke-HelmChartPublishAction.ps1 - Prepare' {
-    It 'Packages a minimal chart into ./out/<name>-<version>.tgz' -Tag 'integration' {
+    BeforeEach {
+        Push-Location -Path "TestDrive:\"
+        
         # Arrange: create a minimal chart in a temp location
-        $chartDir = Join-Path $TestDrive 'chart'
-        New-Item -ItemType Directory -Path $chartDir | Out-Null
-        New-Item -ItemType Directory -Path (Join-Path $chartDir 'templates') | Out-Null
-
+        $chartDir = New-Item -ItemType Directory -Path 'chart'
         @(
             'apiVersion: v2'
             'name: testchart'
             'version: 0.1.0'
             'type: application'
-        ) | Set-Content -Path (Join-Path $chartDir 'Chart.yaml') -Encoding UTF8
+        ) | Set-Content -Path (Join-Path $chartDir 'Chart.yaml') -Encoding UTF8 | Out-Null
+    }
+    
+    AfterEach{
+        Pop-Location
+    }
+
+    It 'Packages a minimal chart into ./out/<name>-<version>.tgz' -Tag 'integration' {
+        # Arrange: create a minimal chart in a temp location
+        $currentLocation = Get-Location
+        $chartDir = Join-Path $currentLocation 'chart'
 
         # Ensure clean out folder in repo root
-        $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+        $outLocation = Join-Path ((Resolve-Path (Join-Path $PSScriptRoot '..')).Path) 'out'
         Push-Location $repoRoot
         try {
-            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'out'
+            if(Test-Path $outLocation) {
+                Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $outLocation
+            }
 
             # Act
             & (Join-Path $repoRoot 'src/Invoke-HelmChartPublishAction.ps1') -Task Prepare -ChartPath $chartDir
@@ -33,9 +44,10 @@ Describe 'Invoke-HelmChartPublishAction.ps1 - Prepare' {
             Test-Path $tgzPath | Should -BeTrue
         }
         finally {
-            Pop-Location
             # Cleanup
-            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $repoRoot 'out')
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $outLocation
+            
+            Pop-Location
         }
     }
 }

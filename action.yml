@@ -15,8 +15,7 @@ inputs:
     required: true
   chart-path:
     description: 'Path to the Helm Chart to package (relative to the workspace root).'
-    required: false
-    default: './src'
+    required: true
   github-registry-path:
     description: 'Path segment under ghcr.io/<owner>/ where charts are pushed (e.g., charts or helm).'
     required: false

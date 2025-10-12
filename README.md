@@ -135,7 +135,7 @@ pwsh -NoLogo -NoProfile -File ./src/Invoke-HelmChartPublishAction.ps1 -Task Publ
 To push to DockerHub locally:
 
 ```powershell
-pwsh -NoLogo -NoProfile -File ./src/Invoke-HelmChartPublishAction.ps1 -Task PublishToDockerHub -DockerHubUsername '<user>' -DockerHubPassword '<token>' -DockerHubNamespace '<org-or-user>' -DockerHubPath 'charts'
+pwsh -NoLogo -NoProfile -File ./src/Invoke-HelmChartPublishAction.ps1 -Task PublishToDockerHub -DockerHubUsername '<user>' -DockerHubToken '<token>' -DockerHubNamespace '<org-or-user>' -DockerHubPath 'charts'
 ```
 
 ## Notes

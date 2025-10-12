@@ -42,7 +42,7 @@ Describe 'Invoke-HelmChartPublishAction.ps1 - Prepare' {
         $chartDir = Join-Path $currentLocation 'chart'
 
         # Ensure clean out folder in repo root
-        $outLocation = Join-Path $repoRoot 'out'
+        $outLocation = Join-Path $currentLocation 'out'
         
         if(-not (Test-Path (Join-Path $chartDir 'Chart.yaml'))) {
             throw "Chart.yaml not found in $chartDir"
@@ -54,10 +54,10 @@ Describe 'Invoke-HelmChartPublishAction.ps1 - Prepare' {
             }
 
             # Act
-            & $scriptPath -Task Prepare -ChartPath $chartDir
+            & $scriptPath -Task Prepare -ChartPath (Convert-Path $chartDir)
 
             # Assert
-            $tgzPath = Join-Path $repoRoot 'out/testchart-0.1.0.tgz'
+            $tgzPath = Join-Path $outLocation 'testchart-0.1.0.tgz'
             Test-Path $tgzPath | Should -BeTrue
         }
         finally {

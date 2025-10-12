@@ -8,6 +8,13 @@ Describe 'Invoke-HelmChartPublishAction.ps1 - Prepare' {
         if (-not (Test-Path $scriptPath)) {
             throw "Action script not found at $scriptPath"
         }
+
+        if (-not (Get-Command ConvertFrom-Yaml -ErrorAction SilentlyContinue)) {
+            Install-Module -Name powershell-yaml -Scope CurrentUser -Force -AcceptLicense -SkipPublisherCheck
+        }
+        if (-not (Get-Command ConvertFrom-Yaml -ErrorAction SilentlyContinue)) {
+            throw 'ConvertFrom-Yaml is not available even after installing powershell-yaml module.'
+        }
     }
     BeforeEach {
         Push-Location -Path "TestDrive:\"

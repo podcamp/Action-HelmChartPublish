@@ -19,7 +19,7 @@ param(
 
     # For DockerHub
     [string]$DockerHubUsername,
-    [string]$DockerHubPassword,
+    [string]$DockerHubToken,
     [string]$DockerHubNamespace,
     [string]$DockerHubPath,
 
@@ -169,7 +169,7 @@ switch ($Task) {
     }
     'PublishToDockerHub' {
         Test-HelmCliAvailable
-        if (-not $DockerHubUsername -or -not $DockerHubPassword) { throw 'DockerHubUsername and DockerHubPassword are required for PublishToDockerHub' }
+        if (-not $DockerHubUsername -or -not $DockerHubToken) { throw 'DockerHubUsername and DockerHubToken are required for PublishToDockerHub' }
         if (-not $DockerHubNamespace) { $DockerHubNamespace = $DockerHubUsername }
         if (-not $DockerHubPath) { $DockerHubPath = 'charts' }
 
@@ -180,7 +180,7 @@ switch ($Task) {
         if (Test-Path ("{0}.prov" -f $tgz.FullName)) { $helmPushProvArgs = @('--prov') }
 
         $ociHostDh = 'registry-1.docker.io'
-        $loginOut = helm registry login $ociHostDh --username $DockerHubUsername --password $DockerHubPassword 2>&1
+        $loginOut = helm registry login $ociHostDh --username $DockerHubUsername --password $DockerHubToken 2>&1
         if ($LASTEXITCODE -ne 0) { throw "Helm registry login to $ociHostDh failed: $loginOut" }
 
         $repo = "oci://$ociHostDh/$DockerHubNamespace/$DockerHubPath"
@@ -225,10 +225,10 @@ switch ($Task) {
             $ref = "registry-1.docker.io/$($DockerHubNamespace)/$($DockerHubPath)/$($ChartName):$($ChartVersion)"
 
             # Ensure docker login for DockerHub so cosign can push signatures
-            if (-not $DockerHubUsername -or -not $DockerHubPassword) {
-                throw 'DockerHubUsername and DockerHubPassword are required for docker login in keyless cosign to DockerHub.'
+            if (-not $DockerHubUsername -or -not $DockerHubToken) {
+                throw 'DockerHubUsername and DockerHubToken are required for docker login in keyless cosign to DockerHub.'
             }
-            $dl = docker login registry-1.docker.io -u $DockerHubUsername -p $DockerHubPassword 2>&1
+            $dl = docker login registry-1.docker.io -u $DockerHubUsername -p $DockerHubToken 2>&1
             if ($LASTEXITCODE -ne 0) { throw "Docker login to registry-1.docker.io failed: $dl" }
         }
         else { throw "Unsupported CosignTarget '$CosignTarget' (use 'GitHub' or 'DockerHub')" }

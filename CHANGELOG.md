@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.2...v0.2.3) (2025-10-12)
+
+
+### Bug Fixes
+
+* update Invoke-HelmChartPublishAction.ps1 to use token for GitHub authentication ([d857d69](https://github.com/nicola-preden/Action-HelmChartPublish/commit/d857d6980443d9951c10c356adfce87a0e22328e))
+
 ## [0.2.2](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.1...v0.2.2) (2025-10-12)
 
 

@@ -20,19 +20,11 @@ inputs:
     description: 'Path segment under ghcr.io/<owner>/ where charts are pushed (e.g., charts or helm).'
     required: false
     default: 'charts'
-  # Cosign toggles (global and per-target)
+  # Cosign toggles (global only)
   enable-cosign:
-    description: 'If true, cosign will sign the pushed OCI chart references (global default, can be overridden per-target).'
+    description: 'If true, cosign will sign the pushed OCI chart references.'
     required: false
     default: 'false'
-  enable-cosign-ghcr:
-    description: 'If set, overrides enable-cosign for GHCR only (true/false). Empty string means inherit global.'
-    required: false
-    default: ''
-  enable-cosign-dockerhub:
-    description: 'If set, overrides enable-cosign for DockerHub only (true/false). Empty string means inherit global.'
-    required: false
-    default: ''
   cosign-annotations:
     description: 'Optional comma-separated annotations for cosign (key=value,key2=value2).'
     required: false
@@ -42,17 +34,9 @@ inputs:
     required: false
     default: ''
   enable-cosign-attest:
-    description: 'If true, cosign will create an attestation for the pushed OCI references (global default, can be overridden per-target).'
+    description: 'If true, cosign will create an attestation for the pushed OCI references.'
     required: false
     default: 'false'
-  enable-cosign-attest-ghcr:
-    description: 'If set, overrides enable-cosign-attest for GHCR only (true/false). Empty string means inherit global.'
-    required: false
-    default: ''
-  enable-cosign-attest-dockerhub:
-    description: 'If set, overrides enable-cosign-attest for DockerHub only (true/false). Empty string means inherit global.'
-    required: false
-    default: ''
   cosign-attest-type:
     description: 'Predicate type for cosign attest (e.g., application/vnd.in-toto+json).'
     required: false
@@ -147,7 +131,7 @@ runs:
       uses: azure/setup-helm@v4
 
     - name: Setup Cosign
-      if: ${{ (inputs.enable-cosign == 'true' || inputs.enable-cosign-attest == 'true' || inputs.enable-cosign-ghcr == 'true' || inputs.enable-cosign-attest-ghcr == 'true' || inputs.enable-cosign-dockerhub == 'true' || inputs.enable-cosign-attest-dockerhub == 'true') && steps.check_release.outputs.release-exists == 'true' }}
+      if: ${{ (inputs.enable-cosign == 'true' || inputs.enable-cosign-attest == 'true') && steps.check_release.outputs.release-exists == 'true' }}
       uses: sigstore/cosign-installer@v3
 
     - name: Package Helm chart
@@ -181,7 +165,7 @@ runs:
         & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task PublishToGitHubRegistry -Token '${{ inputs.token }}' -RepositoryUrl '${{ inputs.repo-url }}' -GitHubRegistryPath '${{ inputs.github-registry-path }}'
 
     - name: Cosign sign (GHCR)
-      if: ${{ (inputs.enable-cosign-ghcr == 'true' || (inputs.enable-cosign-ghcr == '' && inputs.enable-cosign == 'true')) && inputs.push-to-github-registry == 'true' && steps.check_release.outputs.release-exists == 'true' }}
+      if: ${{ inputs.enable-cosign == 'true' && inputs.push-to-github-registry == 'true' && steps.check_release.outputs.release-exists == 'true' }}
       shell: pwsh
       env:
         POWERSHELLUPDATECHECK: 'Off'
@@ -189,7 +173,7 @@ runs:
         & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task CosignSign -CosignTarget 'GitHub' -RepositoryUrl '${{ inputs.repo-url }}' -GitHubRegistryPath '${{ inputs.github-registry-path }}' -ChartName '${{ steps.prep.outputs.chart-name }}' -ChartVersion '${{ steps.prep.outputs.version }}' -CosignAnnotations '${{ inputs.cosign-annotations }}' -CosignArgs '${{ inputs.cosign-args }}'
 
     - name: Cosign attest (GHCR)
-      if: ${{ (inputs.enable-cosign-attest-ghcr == 'true' || (inputs.enable-cosign-attest-ghcr == '' && inputs.enable-cosign-attest == 'true')) && inputs.push-to-github-registry == 'true' && steps.check_release.outputs.release-exists == 'true' }}
+      if: ${{ inputs.enable-cosign-attest == 'true' && inputs.push-to-github-registry == 'true' && steps.check_release.outputs.release-exists == 'true' }}
       shell: pwsh
       env:
         POWERSHELLUPDATECHECK: 'Off'
@@ -205,7 +189,7 @@ runs:
         & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task PublishToDockerHub -DockerHubUsername '${{ inputs.dockerhub-username }}' -DockerHubPassword '${{ inputs.dockerhub-password }}' -DockerHubNamespace '${{ inputs.dockerhub-namespace }}' -DockerHubPath '${{ inputs.dockerhub-path }}'
 
     - name: Cosign sign (DockerHub)
-      if: ${{ (inputs.enable-cosign-dockerhub == 'true' || (inputs.enable-cosign-dockerhub == '' && inputs.enable-cosign == 'true')) && inputs.push-to-dockerhub == 'true' && steps.check_release.outputs.release-exists == 'true' }}
+      if: ${{ inputs.enable-cosign == 'true' && inputs.push-to-dockerhub == 'true' && steps.check_release.outputs.release-exists == 'true' }}
       shell: pwsh
       env:
         POWERSHELLUPDATECHECK: 'Off'
@@ -213,7 +197,7 @@ runs:
         & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task CosignSign -CosignTarget 'DockerHub' -DockerHubUsername '${{ inputs.dockerhub-username }}' -DockerHubNamespace '${{ inputs.dockerhub-namespace }}' -DockerHubPath '${{ inputs.dockerhub-path }}' -ChartName '${{ steps.prep.outputs.chart-name }}' -ChartVersion '${{ steps.prep.outputs.version }}' -CosignAnnotations '${{ inputs.cosign-annotations }}' -CosignArgs '${{ inputs.cosign-args }}'
 
     - name: Cosign attest (DockerHub)
-      if: ${{ (inputs.enable-cosign-attest-dockerhub == 'true' || (inputs.enable-cosign-attest-dockerhub == '' && inputs.enable-cosign-attest == 'true')) && inputs.push-to-dockerhub == 'true' && steps.check_release.outputs.release-exists == 'true' }}
+      if: ${{ inputs.enable-cosign-attest == 'true' && inputs.push-to-dockerhub == 'true' && steps.check_release.outputs.release-exists == 'true' }}
       shell: pwsh
       env:
         POWERSHELLUPDATECHECK: 'Off'

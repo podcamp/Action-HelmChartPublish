@@ -31,22 +31,18 @@ This action packages a Helm chart and publishes it to GitHub Releases and/or OCI
 - dockerhub-namespace: DockerHub namespace (defaults to username if empty).
 - dockerhub-path: Path segment under the namespace (default `charts`).
 
-Cosign (optional, keyless only):
-- enable-cosign: If `true`, cosign will sign pushed OCI references (global default).
-- enable-cosign-ghcr: Override for GHCR (true/false). Empty means inherit `enable-cosign`.
-- enable-cosign-dockerhub: Override for DockerHub (true/false). Empty means inherit `enable-cosign`.
+Cosign (optional, keyless only; global toggles only):
+- enable-cosign: If `true`, cosign will sign pushed OCI references.
 - cosign-annotations: Optional comma-separated annotations for cosign (key=value,key2=value2).
 - cosign-args: Optional extra arguments to pass to `cosign sign` and `cosign attest`.
-- enable-cosign-attest: If `true`, cosign will create an attestation (global default).
-- enable-cosign-attest-ghcr: Override for GHCR attestation (true/false). Empty means inherit `enable-cosign-attest`.
-- enable-cosign-attest-dockerhub: Override for DockerHub attestation (true/false). Empty means inherit `enable-cosign-attest`.
+- enable-cosign-attest: If `true`, cosign will create an attestation.
 - cosign-attest-type: Predicate type for cosign attest (default `application/vnd.in-toto+json`).
 - cosign-attest-predicate: Inline JSON/YAML predicate for attestation (optional).
 - cosign-attest-predicate-path: Path to a predicate file (takes precedence over inline).
 
 Keyless notes:
 - Set `permissions: id-token: write` for the job so cosign can obtain an OIDC token.
-- For GHCR signatures, the action performs a `docker login ghcr.io` with the provided token; for DockerHub, it logs in with `dockerhub-username`/`dockerhub-password`.
+- For GHCR signatures, the action performs a `docker login ghcr.io` with the provided token (or `GITHUB_TOKEN`); for DockerHub, it logs in with `dockerhub-username`/`dockerhub-password`.
 - No private keys are needed or supported; cosign uses OIDC keyless flow.
 
 ## Outputs
@@ -85,71 +81,40 @@ jobs:
           push-to-github-release: 'true'
           push-to-github-registry: 'true'
           push-to-dockerhub: 'false'
-          enable-cosign: 'true'        # enable built-in cosign signing
+          enable-cosign: 'true'
+          # enable-cosign-attest: 'true'        # uncomment to add attestations globally
           # cosign-annotations: repo=${{ github.repository }},ref=${{ github.ref }}
           # cosign-args: '--tlog-upload=true'
 ```
 
 ## More examples
 
-Example 1: GHCR sign + attest, DockerHub sign-only
+Example 1: Sign on both GHCR and DockerHub (no attestations)
 
 ```yaml
-permissions:
-  contents: read
-  packages: write
-  id-token: write
-
-jobs:
-  publish:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Publish chart with per-target cosign
-        uses: ./. 
-        with:
-          tag-name: ${{ github.ref_name }}
-          chart-path: ./charts/mychart
-          push-to-github-registry: 'true'
-          push-to-dockerhub: 'true'
-          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
-          dockerhub-password: ${{ secrets.DOCKERHUB_TOKEN }}
-          dockerhub-namespace: myorg # optional; defaults to username
-          dockerhub-path: charts     # optional; default is charts
-          # Global defaults
-          enable-cosign: 'true'              # sign everywhere by default
-          enable-cosign-attest: 'false'      # no attestation by default
-          # Per-target overrides
-          enable-cosign-attest-ghcr: 'true'  # add attestation on GHCR
+with:
+  tag-name: ${{ github.ref_name }}
+  chart-path: ./charts/mychart
+  push-to-github-registry: 'true'
+  push-to-dockerhub: 'true'
+  dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+  dockerhub-password: ${{ secrets.DOCKERHUB_TOKEN }}
+  enable-cosign: 'true'
+  enable-cosign-attest: 'false'
 ```
 
-Example 2: GHCR sign-only, DockerHub sign + attest
+Example 2: Sign + attest on both GHCR and DockerHub
 
 ```yaml
-permissions:
-  contents: read
-  packages: write
-  id-token: write
-
-jobs:
-  publish:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Publish chart with per-target cosign
-        uses: ./. 
-        with:
-          tag-name: ${{ github.ref_name }}
-          chart-path: ./charts/mychart
-          push-to-github-registry: 'true'
-          push-to-dockerhub: 'true'
-          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
-          dockerhub-password: ${{ secrets.DOCKERHUB_TOKEN }}
-          # Global defaults
-          enable-cosign: 'false'                 # default off
-          enable-cosign-attest: 'false'          # default off
-          # Per-target overrides
-          enable-cosign-ghcr: 'true'             # sign on GHCR only
-          enable-cosign-dockerhub: 'true'        # sign on DockerHub
-          enable-cosign-attest-dockerhub: 'true' # attest on DockerHub only
+with:
+  tag-name: ${{ github.ref_name }}
+  chart-path: ./charts/mychart
+  push-to-github-registry: 'true'
+  push-to-dockerhub: 'true'
+  dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+  dockerhub-password: ${{ secrets.DOCKERHUB_TOKEN }}
+  enable-cosign: 'true'
+  enable-cosign-attest: 'true'
 ```
 
 ## Local quick test (optional)
@@ -180,17 +145,11 @@ pwsh -NoLogo -NoProfile -File ./src/Invoke-HelmChartPublishAction.ps1 -Task Publ
 - Cosign references follow the same hosts and include `<chart>:<version>` tags.
 - The reference `azure/setup-helm@v4` is resolved at runtime; local static analyzers may warn if offline.
 
-## Migration note (breaking change)
+## Migration notes (breaking changes)
 
-- Cosign keys were removed; keyless (OIDC) is now the only supported mode.
-- Ensure your workflow has `permissions: id-token: write` to enable keyless signing/attestation.
-
-Previous versions also supported a generic "private registry" via inputs like `push-to-private-registry` and `private-registry-*`.
-This has been specialized to DockerHub:
-- Replace `push-to-private-registry` with `push-to-dockerhub`.
-- Replace `private-registry-username/password` with `dockerhub-username/password`.
-- Replace per-target cosign toggles `*-private` with `*-dockerhub`.
-- Use `dockerhub-namespace` and `dockerhub-path` to target the destination.
+- Per-target cosign override flags were removed: `enable-cosign-ghcr`, `enable-cosign-dockerhub`, `enable-cosign-attest-ghcr`, `enable-cosign-attest-dockerhub`. Use the global `enable-cosign` and `enable-cosign-attest` instead.
+- Cosign keys were removed previously; keyless (OIDC) is now the only supported mode. Ensure your workflow has `permissions: id-token: write`.
+- Earlier versions also supported a generic "private registry"; this has been specialized to DockerHub.
 
 ## Commit messages and Git hook
 
@@ -221,23 +180,14 @@ See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## Cosign signing and attestation (built-in)
 
-Toggles and precedence:
-- Signing: `enable-cosign` (global), overridden by `enable-cosign-ghcr` and `enable-cosign-dockerhub` if set.
-- Attestation: `enable-cosign-attest` (global), overridden by `enable-cosign-attest-ghcr` and `enable-cosign-attest-dockerhub` if set.
-- Empty string for per-target toggles means "inherit the global".
+Toggles:
+- Signing: `enable-cosign` (global)
+- Attestation: `enable-cosign-attest` (global)
 
 Common scenarios:
-- Sign GHCR only (no attestation anywhere):
+- Sign on all enabled targets (no attestation):
   - enable-cosign: 'true'
   - enable-cosign-attest: 'false'
-  - enable-cosign-dockerhub: 'false'
-- Sign+attest GHCR; sign-only DockerHub:
+- Sign + attest on all enabled targets:
   - enable-cosign: 'true'
-  - enable-cosign-attest: 'false'
-  - enable-cosign-attest-ghcr: 'true'
-  - enable-cosign-dockerhub: 'true'
-- Sign+attest DockerHub only:
-  - enable-cosign: 'false'
-  - enable-cosign-attest: 'false'
-  - enable-cosign-dockerhub: 'true'
-  - enable-cosign-attest-dockerhub: 'true'
+  - enable-cosign-attest: 'true'

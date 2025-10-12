@@ -4,7 +4,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('SetPSGalleryTrusted''DetectModulePath','InstallConvertFromYaml','CheckRelease','Prepare','PublishToGitHubRegistry','PublishToDockerHub','CosignSign')]
+    [ValidateSet('SetPSGalleryTrusted','DetectModulePath','InstallConvertFromYaml','CheckRelease','Prepare','PublishToGitHubRegistry','PublishToDockerHub','CosignSign')]
     [string]$Task,
 
     [string]$Token,

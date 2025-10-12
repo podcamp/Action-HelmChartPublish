@@ -129,6 +129,28 @@ runs:
     - name: Setup Cosign
       if: ${{ inputs.enable-cosign == 'true' && steps.check_release.outputs.release-exists == 'true' }}
       uses: sigstore/cosign-installer@v3
+      
+    - name: PowerShell - Set PSGallery as trusted
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task SetPSGalleryTrusted
+
+    - name: Detect PowerShell CurrentUser module path
+      id: detect-module-path
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task DetectModulePath
+
+    - name: PowerShell - Set module cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.detect-module-path.outputs.path }}
+        key: ${{ runner.os }}-ConvertFromYaml
+
+    - name: PowerShell - Install ConvertFrom-Yaml
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/src/Invoke-HelmChartPublishAction.ps1" -Task InstallConvertFromYaml
 
     - name: Package Helm chart
       if: ${{ steps.check_release.outputs.release-exists == 'true' }}

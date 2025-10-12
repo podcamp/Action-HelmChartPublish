@@ -4,7 +4,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('CheckRelease','Prepare','PublishToGitHubRegistry','PublishToDockerHub','CosignSign')]
+    [ValidateSet('SetPSGalleryTrusted''DetectModulePath','InstallConvertFromYaml','CheckRelease','Prepare','PublishToGitHubRegistry','PublishToDockerHub','CosignSign')]
     [string]$Task,
 
     [string]$Token,
@@ -75,11 +75,8 @@ function Read-ChartInfo {
         $yaml = Get-Content -Raw -Path $chartFile | ConvertFrom-Yaml
         $chartName = $yaml.name
         $chartVersion = $yaml.version
-    } else {
-        $content = Get-Content -Raw -Path $chartFile
-        if ($content -match '(?im)^name:\s*(.+)$') { $chartName = $Matches[1].Trim() }
-        if ($content -match '(?im)^version:\s*([^\s#]+)') { $chartVersion = $Matches[1].Trim() }
     }
+    
     if (-not $chartName) { throw 'Chart name not found in Chart.yaml' }
     if (-not $chartVersion) { throw 'Chart version not found in Chart.yaml' }
     [pscustomobject]@{ Name = $chartName; Version = $chartVersion; ChartFile = $chartFile }
@@ -90,6 +87,35 @@ if (-not $Token) { $Token = $env:GITHUB_TOKEN }
 
 # Dispatch by task using switch for clarity
 switch ($Task) {
+    'SetPSGalleryTrusted' {
+        Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
+    }
+    'DetectModulePath' {
+        $paths = $env:PSModulePath -split [IO.Path]::PathSeparator
+        $homePath = $env:HOME
+        if (-not $homePath) { $homePath = $env:USERPROFILE }
+        $currentUserPath = $paths |
+                Where-Object { $_ -like "$homePath*" -and $_ -match '[Pp]ower[Ss]hell[\\/]Modules$' } |
+                Select-Object -First 1
+        if (-not $currentUserPath) {
+            if ($IsWindows) {
+                $currentUserPath = Join-Path $homePath 'Documents\PowerShell\Modules'
+            } else {
+                $currentUserPath = Join-Path $homePath '.local/share/powershell/Modules'
+            }
+        }
+        New-Item -ItemType Directory -Force -Path $currentUserPath | Out-Null
+
+        Write-GithubOutput -Name 'path' -Value $currentUserPath
+    }
+    'InstallConvertFromYaml' {
+        if (-not (Get-Command ConvertFrom-Yaml -ErrorAction SilentlyContinue)) {
+            Install-Module -Name powershell-yaml -Scope CurrentUser -Force -AcceptLicense -SkipPublisherCheck
+        }
+        if (-not (Get-Command ConvertFrom-Yaml -ErrorAction SilentlyContinue)) {
+            throw 'ConvertFrom-Yaml is not available even after installing powershell-yaml module.'
+        }
+    }
     'CheckRelease' {
         if (-not $GitHubApiUrl) { $GitHubApiUrl = $env:GITHUB_API_URL }
         if (-not $RepositoryUrl) { $RepositoryUrl = $env:GITHUB_REPOSITORY }

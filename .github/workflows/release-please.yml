@@ -30,44 +30,18 @@ jobs:
       - name: Setup Helm
         if: ${{ github.event.inputs.skip-tests == 'false' && github.event_name == 'workflow_dispatch' }}
         uses: azure/setup-helm@v4
-
+        
+      # Run Lint and Pester tests only if not skipped
       - name: Lint (PSScriptAnalyzer)
         if: ${{ github.event.inputs.skip-tests == 'false' && github.event_name == 'workflow_dispatch' }}
-        uses: nicola-preden/Action-PSScriptAnalyzer@v0.3.1
+        uses: nicola-preden/Action-PSScriptAnalyzer@v0
         with:
-          module-path: ./src
-          upload-artifact: 'false'
+          module-path: src
+          test-path: tests
+          upload-artifact: 'true'
           throw-on-warnings: 'false'
           throw-on-errors: 'true'
-
-      - name: Trust PSGallery
-        if: ${{ github.event.inputs.skip-tests == 'false' && github.event_name == 'workflow_dispatch' }}
-        shell: pwsh
-        run: |
-          Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
-
-      - name: Install Pester
-        if: ${{ github.event.inputs.skip-tests == 'false' && github.event_name == 'workflow_dispatch' }}
-        shell: pwsh
-        run: |
-          Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck -AllowClobber
-
-      - name: Run Pester tests
-        if: ${{ github.event.inputs.skip-tests == 'false' && github.event_name == 'workflow_dispatch' }}
-        id: pester
-        shell: pwsh
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          $resultPath = Join-Path $PWD 'testResults.xml'
-          Invoke-Pester -CI -Path tests -Output Detailed
-
-      - name: Upload Pester results artifact
-        if: ${{ github.event.inputs.skip-tests == 'false' && github.event_name == 'workflow_dispatch' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: pester-results
-          path: testResults.xml
-          if-no-files-found: warn
+          throw-on-test-failures: 'true'
   
   release-please:
     # Run only on manual dispatch or on push with a release-please bump commit message

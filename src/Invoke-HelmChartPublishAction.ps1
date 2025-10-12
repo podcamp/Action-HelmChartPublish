@@ -4,7 +4,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('CheckRelease','Prepare','PublishToGitHubRegistry','PublishToDockerHub','CosignSign','CosignAttest')]
+    [ValidateSet('CheckRelease','Prepare','PublishToGitHubRegistry','PublishToDockerHub','CosignSign')]
     [string]$Task,
 
     [string]$Token,
@@ -233,6 +233,7 @@ switch ($Task) {
         }
         else { throw "Unsupported CosignTarget '$CosignTarget' (use 'GitHub' or 'DockerHub')" }
 
+        # Common flags
         $annoFlags = @()
         if ($CosignAnnotations) {
             foreach ($pair in $CosignAnnotations.Split(',')) {
@@ -240,76 +241,21 @@ switch ($Task) {
                 $annoFlags += @('-a', $pair.Trim())
             }
         }
-
         $extraArgs = @()
         if ($CosignArgs) { $extraArgs = $CosignArgs -split '\s+' }
 
-        $cmd = @('sign','--yes')
-        $cmd += $annoFlags
-        $cmd += $extraArgs
-        $cmd += @($ref)
-
-        Write-Verbose "Running: cosign $($cmd -join ' ')"
-        $out = cosign @cmd 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "cosign sign failed: $out" }
+        # Sign
+        $signCmd = @('sign','--yes')
+        $signCmd += $annoFlags
+        $signCmd += $extraArgs
+        $signCmd += @($ref)
+        Write-Verbose "Running: cosign $($signCmd -join ' ')"
+        $signOut = cosign @signCmd 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "cosign sign failed: $signOut" }
         Write-Verbose "cosign sign succeeded for $ref"
-        break
-    }
-    'CosignAttest' {
-        Test-CosignCliAvailable
 
-        if (-not $ChartName -or -not $ChartVersion) {
-            if ($ChartPath) {
-                $info = Read-ChartInfo -Path $ChartPath
-                if (-not $ChartName) { $ChartName = $info.Name }
-                if (-not $ChartVersion) { $ChartVersion = $info.Version }
-            }
-        }
-        if (-not $ChartName -or -not $ChartVersion) { throw 'ChartName and ChartVersion are required for CosignAttest' }
-
-        $ref = $null
-        if ($CosignTarget -eq 'GitHub') {
-            if (-not $RepositoryUrl) { $RepositoryUrl = $env:GITHUB_REPOSITORY }
-            if (-not ($RepositoryUrl -and $RepositoryUrl.Contains('/'))) { throw "Invalid RepositoryUrl '$RepositoryUrl' (expected 'owner/repo')" }
-            if (-not $GitHubRegistryPath) { $GitHubRegistryPath = 'charts' }
-            $owner = $RepositoryUrl.Split('/')[0]
-            $ref = "ghcr.io/$($owner)/$($GitHubRegistryPath)/$($ChartName):$($ChartVersion)"
-
-            # Ensure docker login for GHCR so cosign can push attestations
-            $tok = $Token
-            if (-not $tok) { $tok = $env:GITHUB_TOKEN }
-            if (-not $tok) { throw 'Token or GITHUB_TOKEN is required for ghcr.io docker login in keyless cosign.' }
-            $dl = docker login ghcr.io -u $owner -p $tok 2>&1
-            if ($LASTEXITCODE -ne 0) { throw "Docker login to ghcr.io failed: $dl" }
-        }
-        elseif ($CosignTarget -eq 'DockerHub') {
-            if (-not $DockerHubNamespace) { $DockerHubNamespace = $DockerHubUsername }
-            if (-not $DockerHubNamespace) { throw 'DockerHubNamespace or DockerHubUsername is required for CosignAttest when CosignTarget=DockerHub' }
-            if (-not $DockerHubPath) { $DockerHubPath = 'charts' }
-            $ref = "registry-1.docker.io/$($DockerHubNamespace)/$($DockerHubPath)/$($ChartName):$($ChartVersion)"
-
-            # Ensure docker login for DockerHub so cosign can push attestations
-            if (-not $DockerHubUsername -or -not $DockerHubPassword) {
-                throw 'DockerHubUsername and DockerHubPassword are required for docker login in keyless cosign to DockerHub.'
-            }
-            $dl = docker login registry-1.docker.io -u $DockerHubUsername -p $DockerHubPassword 2>&1
-            if ($LASTEXITCODE -ne 0) { throw "Docker login to registry-1.docker.io failed: $dl" }
-        }
-        else { throw "Unsupported CosignTarget '$CosignTarget' (use 'GitHub' or 'DockerHub')" }
-
-        $annoFlags = @()
-        if ($CosignAnnotations) {
-            foreach ($pair in $CosignAnnotations.Split(',')) {
-                if ([string]::IsNullOrWhiteSpace($pair)) { continue }
-                $annoFlags += @('-a', $pair.Trim())
-            }
-        }
-
-        $extraArgs = @()
-        if ($CosignArgs) { $extraArgs = $CosignArgs -split '\s+' }
-
+        # Attest (unified)
         if (-not $CosignAttestType) { $CosignAttestType = 'application/vnd.in-toto+json' }
-
         $predicateFile = $CosignAttestPredicatePath
         $tempPredicate = $false
         if (-not $predicateFile) {
@@ -325,15 +271,13 @@ switch ($Task) {
                 $tempPredicate = $true
             }
         }
-
-        $cmd = @('attest','--yes','--type', $CosignAttestType,'--predicate', $predicateFile)
-        $cmd += $annoFlags
-        $cmd += $extraArgs
-        $cmd += @($ref)
-
-        Write-Verbose "Running: cosign $($cmd -join ' ')"
-        $out = cosign @cmd 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "cosign attest failed: $out" }
+        $attestCmd = @('attest','--yes','--type', $CosignAttestType,'--predicate', $predicateFile)
+        $attestCmd += $annoFlags
+        $attestCmd += $extraArgs
+        $attestCmd += @($ref)
+        Write-Verbose "Running: cosign $($attestCmd -join ' ')"
+        $attestOut = cosign @attestCmd 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "cosign attest failed: $attestOut" }
         Write-Verbose "cosign attest succeeded for $ref"
 
         if ($tempPredicate -and (Test-Path $predicateFile)) { Remove-Item -Force $predicateFile -ErrorAction SilentlyContinue }

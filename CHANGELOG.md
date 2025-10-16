@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.7](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.6...v0.2.7) (2025-10-16)
+
+
+### Bug Fixes
+
+* enable experimental features for Cosign signing in Invoke-HelmChartPublishAction.ps1 ([f427b94](https://github.com/nicola-preden/Action-HelmChartPublish/commit/f427b947eb82cb276f0c9d1dec0f3921aa8f01d5))
+
 ## [0.2.6](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.5...v0.2.6) (2025-10-16)
 
 

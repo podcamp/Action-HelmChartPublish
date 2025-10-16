@@ -36,7 +36,6 @@ inputs:
   cosign-attest-type:
     description: 'Predicate type for cosign attest (e.g., application/vnd.in-toto+json).'
     required: false
-    default: 'application/vnd.in-toto+json'
   cosign-attest-predicate:
     description: 'Inline JSON/YAML predicate content for cosign attest.'
     required: false

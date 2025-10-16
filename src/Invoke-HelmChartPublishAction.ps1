@@ -281,7 +281,6 @@ switch ($Task) {
         Write-Verbose "cosign sign succeeded for $ref"
 
         # Attest (unified)
-        if (-not $CosignAttestType) { $CosignAttestType = 'application/vnd.in-toto+json' }
         $predicateFile = $CosignAttestPredicatePath
         $tempPredicate = $false
         if (-not $predicateFile) {
@@ -297,7 +296,10 @@ switch ($Task) {
                 $tempPredicate = $true
             }
         }
-        $attestCmd = @('attest','--yes','--type', $CosignAttestType,'--predicate', $predicateFile)
+        $attestCmd = @('attest','--yes')
+        
+        if ($CosignAttestType) { $attestCmd += @('--type', $CosignAttestType) }
+        $attestCmd += @('--predicate', $predicateFile)
         $attestCmd += $annoFlags
         $attestCmd += $extraArgs
         $attestCmd += @($ref)

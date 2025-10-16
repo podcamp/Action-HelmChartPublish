@@ -127,7 +127,7 @@ runs:
 
     - name: Setup Cosign
       if: ${{ inputs.enable-cosign == 'true' && steps.check_release.outputs.release-exists == 'true' }}
-      uses: sigstore/cosign-installer@v3
+      uses: sigstore/cosign-installer@v4.0.0
       
     - name: PowerShell - Set PSGallery as trusted
       shell: pwsh

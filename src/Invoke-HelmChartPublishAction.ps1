@@ -219,7 +219,6 @@ switch ($Task) {
     }
     'CosignSign' {
         Test-CosignCliAvailable
-        $env:COSIGN_EXPERIMENTAL = '1'
         
         if (-not $ChartName -or -not $ChartVersion) {
             if ($ChartPath) {

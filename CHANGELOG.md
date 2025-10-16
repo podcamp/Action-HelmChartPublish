@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.10](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.9...v0.2.10) (2025-10-16)
+
+
+### Bug Fixes
+
+* disable experimental features for Cosign signing in Invoke-HelmChartPublishAction.ps1 ([f6519bc](https://github.com/nicola-preden/Action-HelmChartPublish/commit/f6519bc99891f80054c1d3f5adb656fdea5ac5cf))
+* update signing and attesting commands to include recursive option ([550077e](https://github.com/nicola-preden/Action-HelmChartPublish/commit/550077e23bbcb0e975c13b5134d9c98748432468))
+
 ## [0.2.9](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.8...v0.2.9) (2025-10-16)
 
 

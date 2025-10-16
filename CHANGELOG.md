@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.5](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.4...v0.2.5) (2025-10-16)
+
+
+### Bug Fixes
+
+* update Invoke-HelmChartPublishAction.ps1 to use digest references for signing and attesting ([d21d504](https://github.com/nicola-preden/Action-HelmChartPublish/commit/d21d50476e07b9384d541ab23a8536dac244303d))
+
 ## [0.2.4](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.3...v0.2.4) (2025-10-16)
 
 

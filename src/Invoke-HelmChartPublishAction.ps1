@@ -275,7 +275,7 @@ switch ($Task) {
         if ($CosignArgs) { $extraArgs = $CosignArgs -split '\s+' }
 
         # Sign using digest ref
-        $signCmd = @('sign','--yes', '--registry-referrers-mode', 'oci-1-1')
+        $signCmd = @('sign','--yes', '--attachment-tag-prefix', "[AttachmentTagPrefix]$($ChartVersion).[AttachmentName]")
         $signCmd += $annoFlags
         $signCmd += $extraArgs
         $signCmd += @($ref)
@@ -300,7 +300,7 @@ switch ($Task) {
                 $tempPredicate = $true
             }
         }
-        $attestCmd = @('attest','--yes', '--registry-referrers-mode', 'oci-1-1')
+        $attestCmd = @('attest','--yes', '--recursive', '--attachment-tag-prefix', "[AttachmentTagPrefix]$($ChartVersion).[AttachmentName]")
         
         if ($CosignAttestType) { $attestCmd += @('--type', $CosignAttestType) }
         $attestCmd += @('--predicate', $predicateFile)

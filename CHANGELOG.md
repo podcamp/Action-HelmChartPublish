@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.6](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.5...v0.2.6) (2025-10-16)
+
+
+### Bug Fixes
+
+* simplify reference handling in Invoke-HelmChartPublishAction.ps1 ([1a94740](https://github.com/nicola-preden/Action-HelmChartPublish/commit/1a9474019dcee9ae642ad5ff9035271b88502b95))
+
 ## [0.2.5](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.4...v0.2.5) (2025-10-16)
 
 

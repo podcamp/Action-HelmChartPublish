@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.3...v0.2.4) (2025-10-16)
+
+
+### Bug Fixes
+
+* remove default value for cosign attest type in action.yml and update attest command in Invoke-HelmChartPublishAction.ps1 ([4a8d0d2](https://github.com/nicola-preden/Action-HelmChartPublish/commit/4a8d0d2afc7432a3292af963432f7c0ce9ba55ba))
+
 ## [0.2.3](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.2...v0.2.3) (2025-10-12)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.11](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.10...v0.2.11) (2025-10-16)
+
+
+### Bug Fixes
+
+* remove attachment tag prefix from signing and attesting commands in Invoke-HelmChartPublishAction.ps1 ([64612ac](https://github.com/nicola-preden/Action-HelmChartPublish/commit/64612aceaaf629d2da038e9e7993714f5eacdc1a))
+
 ## [0.2.10](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.9...v0.2.10) (2025-10-16)
 
 

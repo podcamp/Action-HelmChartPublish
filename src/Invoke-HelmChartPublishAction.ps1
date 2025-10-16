@@ -229,13 +229,16 @@ switch ($Task) {
         }
         if (-not $ChartName -or -not $ChartVersion) { throw 'ChartName and ChartVersion are required for CosignSign' }
 
+        # Build a tag-based reference first; we'll resolve it to a digest-based reference
         $ref = $null
+        $tagRef = $null
         if ($CosignTarget -eq 'GitHub') {
             if (-not $RepositoryUrl) { $RepositoryUrl = $env:GITHUB_REPOSITORY }
             if (-not ($RepositoryUrl -and $RepositoryUrl.Contains('/'))) { throw "Invalid RepositoryUrl '$RepositoryUrl' (expected 'owner/repo')" }
             if (-not $GitHubRegistryPath) { $GitHubRegistryPath = 'charts' }
             $owner = $RepositoryUrl.Split('/')[0]
-            $ref = "ghcr.io/$($owner)/$($GitHubRegistryPath)/$($ChartName):$($ChartVersion)"
+            $ref = "ghcr.io/$($owner)/$($GitHubRegistryPath)/$($ChartName)"
+            $tagRef = "$($ref):$($ChartVersion)"
 
             # Ensure docker login for GHCR so cosign can push signatures
             $tok = $Token
@@ -248,7 +251,8 @@ switch ($Task) {
             if (-not $DockerHubNamespace) { $DockerHubNamespace = $DockerHubUsername }
             if (-not $DockerHubNamespace) { throw 'DockerHubNamespace or DockerHubUsername is required for CosignSign when CosignTarget=DockerHub' }
             if (-not $DockerHubPath) { $DockerHubPath = 'charts' }
-            $ref = "registry-1.docker.io/$($DockerHubNamespace)/$($DockerHubPath)/$($ChartName):$($ChartVersion)"
+            $ref = "registry-1.docker.io/$($DockerHubNamespace)/$($DockerHubPath)/$($ChartName)"
+            $tagRef = "$($ref):$($ChartVersion)"
 
             # Ensure docker login for DockerHub so cosign can push signatures
             if (-not $DockerHubUsername -or -not $DockerHubToken) {
@@ -258,6 +262,18 @@ switch ($Task) {
             if ($LASTEXITCODE -ne 0) { throw "Docker login to registry-1.docker.io failed: $dl" }
         }
         else { throw "Unsupported CosignTarget '$CosignTarget' (use 'GitHub' or 'DockerHub')" }
+
+        # Resolve the tag reference to a digest to avoid mutable tag issues
+        Write-Verbose "Resolving digest for $tagRef"
+        $digestOutput = cosign digest $tagRef 2>&1
+        if ($LASTEXITCODE -ne 0 -or -not $digestOutput) { throw "Failed to resolve digest for ${tagRef}: ${digestOutput}" }
+        $digest = ($digestOutput | Select-Object -First 1).Trim()
+        if (-not $digest -or -not ($digest -match '^[A-Za-z0-9_+.-]+:[0-9a-fA-F]{32,}$')) {
+            throw "cosign digest returned an invalid digest: '$digest'"
+        }
+
+        $shaRef = "$($ref)@$digest"
+        Write-Verbose "Using digest reference: $shaRef"
 
         # Common flags
         $annoFlags = @()
@@ -270,17 +286,17 @@ switch ($Task) {
         $extraArgs = @()
         if ($CosignArgs) { $extraArgs = $CosignArgs -split '\s+' }
 
-        # Sign
+        # Sign using digest ref
         $signCmd = @('sign','--yes')
         $signCmd += $annoFlags
         $signCmd += $extraArgs
-        $signCmd += @($ref)
+        $signCmd += @($shaRef)
         Write-Verbose "Running: cosign $($signCmd -join ' ')"
         $signOut = cosign @signCmd 2>&1
         if ($LASTEXITCODE -ne 0) { throw "cosign sign failed: $signOut" }
-        Write-Verbose "cosign sign succeeded for $ref"
+        Write-Verbose "cosign sign succeeded for $shaRef"
 
-        # Attest (unified)
+        # Attest (unified) using digest ref
         $predicateFile = $CosignAttestPredicatePath
         $tempPredicate = $false
         if (-not $predicateFile) {
@@ -302,11 +318,11 @@ switch ($Task) {
         $attestCmd += @('--predicate', $predicateFile)
         $attestCmd += $annoFlags
         $attestCmd += $extraArgs
-        $attestCmd += @($ref)
+        $attestCmd += @($shaRef)
         Write-Verbose "Running: cosign $($attestCmd -join ' ')"
         $attestOut = cosign @attestCmd 2>&1
         if ($LASTEXITCODE -ne 0) { throw "cosign attest failed: $attestOut" }
-        Write-Verbose "cosign attest succeeded for $ref"
+        Write-Verbose "cosign attest succeeded for $shaRef"
 
         if ($tempPredicate -and (Test-Path $predicateFile)) { Remove-Item -Force $predicateFile -ErrorAction SilentlyContinue }
         break

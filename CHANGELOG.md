@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.8](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.7...v0.2.8) (2025-10-16)
+
+
+### Features
+
+* update Cosign installer version to v4.0.0 in action.yml ([02135ba](https://github.com/nicola-preden/Action-HelmChartPublish/commit/02135bafd836292a1dfa1223696113fb1216dc42))
+
 ## [0.2.7](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.6...v0.2.7) (2025-10-16)
 
 

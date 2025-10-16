@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.9](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.8...v0.2.9) (2025-10-16)
+
+
+### Bug Fixes
+
+* update signing and attesting commands to include attachment tag prefix ([7012385](https://github.com/nicola-preden/Action-HelmChartPublish/commit/701238566c3a01c5716ef521ac873376ede754fd))
+
 ## [0.2.8](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.7...v0.2.8) (2025-10-16)
 
 

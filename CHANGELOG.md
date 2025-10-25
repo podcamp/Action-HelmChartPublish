@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.12](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.11...v0.2.12) (2025-10-25)
+
+
+### Features
+
+* add function to validate Helm chart dependencies in Invoke-HelmChartPublishAction.ps1 ([cf7d5f9](https://github.com/nicola-preden/Action-HelmChartPublish/commit/cf7d5f9bc66a6f0e38c40100ffb96250fe2a4d4f))
+
 ## [0.2.11](https://github.com/nicola-preden/Action-HelmChartPublish/compare/v0.2.10...v0.2.11) (2025-10-16)
 
 

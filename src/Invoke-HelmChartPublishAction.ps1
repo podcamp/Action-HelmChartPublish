@@ -82,6 +82,34 @@ function Read-ChartInfo {
     [pscustomobject]@{ Name = $chartName; Version = $chartVersion; ChartFile = $chartFile }
 }
 
+function Test-HelmDependenciesPresent {
+    param(
+        [Parameter(Mandatory=$true)][string]$ChartDir
+    )
+    $chartFile = Join-Path -Path $ChartDir -ChildPath 'Chart.yaml'
+    if (-not (Get-Command ConvertFrom-Yaml -ErrorAction SilentlyContinue)) { return $true }
+    if (-not (Test-Path $chartFile)) { return $true }
+
+    $yaml = Get-Content -Raw -Path $chartFile | ConvertFrom-Yaml
+    if (-not $yaml.dependencies) { return $true }
+
+    $chartsFolder = Join-Path -Path $ChartDir -ChildPath 'charts'
+    $missing = @()
+    foreach($dep in $yaml.dependencies) {
+        $name = $dep.alias
+        if (-not $name) { $name = $dep.name }
+        if (-not $name) { continue }
+        $glob = Join-Path $chartsFolder ("{0}-*.tgz" -f $name)
+        $found = Get-ChildItem -LiteralPath $chartsFolder -Filter ("{0}-*.tgz" -f $name) -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $found) { $missing += $name }
+    }
+    if ($missing.Count -gt 0) {
+        Write-Verbose ("Missing dependencies in charts/: {0}" -f ($missing -join ', '))
+        return $false
+    }
+    return $true
+}
+
 # Fallback token from environment if not provided
 if (-not $Token) { $Token = $env:GITHUB_TOKEN }
 
@@ -141,6 +169,25 @@ switch ($Task) {
         Test-HelmCliAvailable
 
         $info = Read-ChartInfo -Path $ChartPath
+
+        # Ensure chart dependencies are present (populates ./charts from Chart.lock/Chart.yaml)
+        $depBuildOut = helm dependency build "$ChartPath" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Verbose "helm dependency build failed, will try update: $depBuildOut"
+        }
+
+        # Validate dependencies exist; if missing, try 'helm dependency update' then re-check
+        $depsOk = Test-HelmDependenciesPresent -ChartDir $ChartPath
+        if (-not $depsOk -or $LASTEXITCODE -ne 0) {
+            $depUpdateOut = helm dependency update "$ChartPath" 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "helm dependency update failed: $depUpdateOut"
+            }
+            $depsOk = Test-HelmDependenciesPresent -ChartDir $ChartPath
+            if (-not $depsOk) {
+                throw 'Some dependencies are still missing under charts/ after helm dependency update.'
+            }
+        }
 
         # Create output folder and package
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue out

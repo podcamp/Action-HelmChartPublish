@@ -77,7 +77,7 @@ If your commit is rejected, adjust the message and commit again. The hook runs a
 
 ## Communication
 
-- Primary maintainer: @nicola-preden
+- Primary maintainer: @podcamp
 - For security or architecture changes: open an issue/RFC and tag the maintainers.
 
 ## License

@@ -34,7 +34,7 @@ jobs:
       # Run Lint and Pester tests only if not skipped
       - name: Lint (PSScriptAnalyzer)
         if: ${{ github.event.inputs.skip-tests == 'false' && github.event_name == 'workflow_dispatch' }}
-        uses: nicola-preden/Action-PSScriptAnalyzer@v0
+        uses: podcamp/Action-PSScriptAnalyzer@v0
         with:
           module-path: src
           test-path: tests
@@ -68,7 +68,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Release Please
-        uses: nicola-preden/Action-ReleasePlease@v1
+        uses: podcamp/Action-ReleasePlease@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: .release-please-config.json

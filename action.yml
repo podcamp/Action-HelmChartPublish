@@ -3,7 +3,7 @@
 
 name: HelmChartPublish
 description: Package and publish a Helm Chart to GitHub Releases and selected OCI registries (GHCR and/or DockerHub).
-author: nicola-preden
+author: podcamp
 
 inputs:
   token:

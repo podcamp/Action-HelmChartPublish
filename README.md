@@ -73,7 +73,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Publish chart (with cosign keyless)
-        uses: ./. # or nicola-preden/HelmChartPublish@v1 when published
+        uses: ./. # or podcamp/HelmChartPublish@v1 when published
         with:
           tag-name: ${{ github.ref_name }}
           chart-path: ./charts/mychart
